@@ -10,11 +10,11 @@ use crate::file_system::FileWatcher;
 async fn main() {
     let mut watcher = FileWatcher::new().await.unwrap();
     watcher.init_watcher().await;
-    watcher
-        .watch(&PathBuf::from(
-            "/Users/emmi/projects/projects/hestia/test_vault/",
-        ))
-        .await
-        .unwrap();
+    // watcher
+    //     .watch(&PathBuf::from(
+    //         "/Users/emmi/projects/projects/hestia/test_vault/",
+    //     ))
+    //     .await
+    //     .unwrap();
     hestia_tauri_lib::run()
 }
