@@ -12,7 +12,7 @@ async fn main() {
     watcher.init_watcher().await;
     watcher
         .watch(&PathBuf::from(
-            "/home/emmi/projects/projects/hestia/test_vault/",
+            "/Users/emmi/projects/projects/hestia/test_vault/",
         ))
         .await
         .unwrap();

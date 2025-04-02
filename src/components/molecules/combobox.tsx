@@ -17,80 +17,58 @@ import {
 import { Button } from "@/components/ui/button"
 import { Check, ChevronsUpDown, DivideSquareIcon } from "lucide-react"
 
-const frameworks = [
-  {
-    value: "next.js",
-    label: "Next.js",
-  },
-  {
-    value: "sveltekit",
-    label: "SvelteKit",
-  },
-  {
-    value: "nuxt.js",
-    label: "Nuxt.js",
-  },
-  {
-    value: "remix",
-    label: "Remix",
-  },
-  {
-    value: "astro",
-    label: "Astro",
-  },
-]
-type ComboBoxEntry = {
-  value: String;
-  label: String;
+export type ComboBoxEntry = {
+  value: string;
+  logo: React.ElementType;
+  label: string;
 }
 
 type ComboBoxList = {
-  list: Array<ComboBoxEntry>
+  title: string;
+  list: Array<ComboBoxEntry>;
 }
 
-function ComboBox(props: ComboBoxList) {
+export function ComboBox({ title, list }: ComboBoxList) {
+  const [activeVault, setActiveVault] = React.useState("")
   const [open, setOpen] = React.useState(false)
   const [value, setValue] = React.useState("")
 
   return (
     <>
-      <Button onClick={() => console.log("Action fired")}></Button>
-      <div className="bg-indigo-500 w-64 h-[200px]">Hello</div>
-      <Popover open={open} onOpenChange={() => { console.log("Open Change"); setOpen }}>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger>
           <Button
             variant="outline"
             role="combobox"
-            onClick={() => { console.log("Button Clicked!"); setOpen(!open) }}
             aria-expanded={open}
             className="w-[200px] justify-between"
           >
-            {value
-              ? frameworks.find((framework) => framework.value === value)?.label
-              : "Select framework..."}
+            {activeVault
+              ? list.find((list) => list.value === value)?.label
+              : `Select ${title}...`}
             <ChevronsUpDown className="opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[200px] p-0">
           <Command>
-            <CommandInput placeholder="Search framework..." className="h-9" />
+            <CommandInput placeholder={`Search ${title}...`} className="h-9" />
             <CommandList>
-              <CommandEmpty>No framework found.</CommandEmpty>
+              <CommandEmpty>{`No ${title} found.`}</CommandEmpty>
               <CommandGroup>
-                {frameworks.map((framework) => (
+                {list.map((entry) => (
                   <CommandItem
-                    key={framework.value}
-                    value={framework.value}
+                    key={entry.value}
+                    value={entry.value}
                     onSelect={(currentValue) => {
-                      setValue(currentValue === value ? "" : currentValue)
+                      setActiveVault(currentValue === activeVault ? "" : currentValue)
                       setOpen(false)
                     }}
                   >
-                    {framework.label}
+                    {entry.label}
                     <Check
                       className={cn(
                         "ml-auto",
-                        value === framework.value ? "opacity-100" : "opacity-0"
+                        activeVault === entry.value ? "opacity-100" : "opacity-0"
                       )}
                     />
                   </CommandItem>
