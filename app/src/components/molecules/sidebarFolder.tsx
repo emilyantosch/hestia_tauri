@@ -26,14 +26,14 @@ export type Folder = {
 const RecursiveFolderItem = ({ folder }: { folder: Folder }) => {
   return (
     <SidebarMenuSubItem key={folder.title}>
-      <Collapsible defaultOpen className="group/collapsible">
+      <Collapsible className={`group/collapsible-${folder.title}`} >
         <CollapsibleTrigger>
           <SidebarMenuSubButton asChild>
-            <div>
+            <div className="bg-amber-50">
               <FolderClosed className="mx-1" />
-              <span>{folder.title}</span>
+              <span className="bg-indigo-50 flex grow">{folder.title.replace(" ", "x")}</span>
               {folder.subfolder.length > 0 && (
-                <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+                <ChevronDown className={`ml-auto transition-transform group-data-[state=open]/collapsible-${folder.title}:rotate-180`} />
               )}
             </div>
           </SidebarMenuSubButton>
@@ -54,12 +54,12 @@ const RecursiveFolderItem = ({ folder }: { folder: Folder }) => {
 
 export function SidebarFolder({ title, subfolder }: Folder) {
   return (
-    <Collapsible defaultOpen className="group/collapsible">
-      <SidebarGroup>
+    <Collapsible className="group/collapsible-top-folder">
+      <SidebarGroup className="overflow-clip">
         <SidebarGroupLabel asChild>
           <CollapsibleTrigger>
             {title}
-            <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
+            <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible-top-folder:rotate-180" />
           </CollapsibleTrigger>
         </SidebarGroupLabel>
         <CollapsibleContent>

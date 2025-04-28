@@ -1,8 +1,8 @@
-use notify::{Config, Error, Event, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Error, RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{
-    new_debouncer, DebounceEventResult, DebouncedEvent, Debouncer, FileIdMap, RecommendedCache,
+    new_debouncer, DebounceEventResult, DebouncedEvent, Debouncer, RecommendedCache,
 };
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 
