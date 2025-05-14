@@ -15,7 +15,7 @@ function App() {
   return (
     <div>
       <Layout>
-        {/* <ComboBox list={test_entry} title="Vault" /> */}
+        <ComboBox list={test_entry} title="Vault" />
         <div></div>
       </Layout>
     </div>

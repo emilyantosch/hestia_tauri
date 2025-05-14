@@ -26,4 +26,6 @@ tokio = { version = "*", features = ["full"] }
 notify = "8.0.0"
 notify-debouncer-full = "0.5.0"
 rfd = { version = "*", default-features = false, features = ["tokio", "xdg-portal"] }
+entity = {path = "../entity"}
+sea-orm = {version = "1.1.10"}
 

@@ -1,4 +1,6 @@
+mod errors;
 mod file_system;
+use crate::errors::HestiaErrors;
 use crate::file_system::FileWatcher;
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
