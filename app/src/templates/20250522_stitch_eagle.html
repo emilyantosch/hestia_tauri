@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>TagMaster</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<style>
+    .material-icons {
+      font-size: 20px;
+    }::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #2d2d2d;}
+    ::-webkit-scrollbar-thumb {
+      background: #555;border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #777;}
+  </style>
+</head>
+<body class="bg-neutral-800 text-neutral-300 flex font-sans h-screen">
+<aside class="w-64 bg-neutral-900 p-4 space-y-2 border-r border-neutral-700 flex flex-col">
+<div class="flex items-center space-x-2 mb-2">
+<span class="material-icons text-red-500">circle</span>
+<span class="material-icons text-yellow-500">circle</span>
+<span class="material-icons text-green-500">circle</span>
+</div>
+<div class="flex-grow space-y-4 overflow-y-auto">
+<div class="space-y-1">
+<div class="flex items-center justify-between text-neutral-400 hover:text-neutral-100 cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons">photo_library</span>
+<span>Graphic Design</span>
+</div>
+<span class="material-icons text-sm">expand_more</span>
+</div>
+<div class="pl-4 space-y-1">
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<span>All</span>
+<span class="text-xs text-neutral-500">2,524</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-1">
+<span class="material-icons text-sm text-red-500">label</span>
+<span>Uncategorized</span>
+</div>
+<span class="text-xs text-neutral-500">2</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<span>Untagged</span>
+<span class="text-xs text-neutral-500">1,856</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<span>Random</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-1">
+<span class="material-icons text-sm">label</span>
+<span>All Tags</span>
+</div>
+<span class="text-xs text-neutral-500">130</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-1">
+<span class="material-icons text-sm">delete</span>
+<span>Trash</span>
+</div>
+<span class="text-xs text-neutral-500">41</span>
+</div>
+</div>
+</div>
+<div class="space-y-1">
+<h3 class="text-xs text-neutral-500 font-semibold uppercase tracking-wider">Smart Folders (4)</h3>
+<div class="flex items-center space-x-2 hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<span class="material-icons text-sm">history</span>
+<span>Last Week</span>
+</div>
+<div class="flex items-center space-x-2 hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<span class="material-icons text-sm">date_range</span>
+<span>Last 30 Days</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm text-red-400">folder</span>
+<span>Red Ideas</span>
+</div>
+<span class="text-xs text-neutral-500">35</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm text-blue-400">folder</span>
+<span>Blue Ideas</span>
+</div>
+<span class="text-xs text-neutral-500">32</span>
+</div>
+</div>
+<div class="space-y-1">
+<h3 class="text-xs text-neutral-500 font-semibold uppercase tracking-wider">Folders (63)</h3>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">folder_open</span>
+<span>Poster Design</span>
+</div>
+<span class="text-xs text-neutral-500">878</span>
+</div>
+<div class="pl-4 space-y-1">
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">folder_open</span>
+<span>Illustration</span>
+</div>
+<span class="text-xs text-neutral-500">5</span>
+</div>
+<div class="pl-4 space-y-1">
+<div class="flex items-center justify-between bg-neutral-700 text-neutral-100 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">folder</span>
+<span>Flat</span>
+</div>
+<span class="text-xs text-neutral-500">95</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">folder</span>
+<span>Hand drawn</span>
+</div>
+<span class="text-xs text-neutral-500">73</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">folder</span>
+<span>Gradient</span>
+</div>
+<span class="text-xs text-neutral-500">34</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">folder</span>
+<span>3D</span>
+</div>
+<span class="text-xs text-neutral-500">28</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">folder</span>
+<span>Minimalist</span>
+</div>
+<span class="text-xs text-neutral-500">53</span>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">folder</span>
+<span>Book design</span>
+</div>
+<span class="text-xs text-neutral-500">153</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">folder</span>
+<span>Packaging Design</span>
+</div>
+<span class="text-xs text-neutral-500">397</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">folder</span>
+<span>Typeface Design</span>
+</div>
+<span class="text-xs text-neutral-500">182</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">folder</span>
+<span>Business Card Design</span>
+</div>
+<span class="text-xs text-neutral-500">117</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">folder</span>
+<span>CIS design</span>
+</div>
+<span class="text-xs text-neutral-500">173</span>
+</div>
+<div class="flex items-center justify-between hover:bg-neutral-700 p-1 rounded-md cursor-pointer">
+<div class="flex items-center space-x-2">
+<span class="material-icons text-sm">folder</span>
+<span>Collection</span>
+</div>
+<span class="text-xs text-neutral-500">164</span>
+</div>
+</div>
+</div>
+<div class="mt-auto pt-4 border-t border-neutral-700">
+<div class="flex items-center space-x-2 text-neutral-400 hover:text-neutral-100 cursor-pointer">
+<span class="material-icons">filter_alt</span>
+<span>Filter</span>
+</div>
+</div>
+</aside>
+<main class="flex-1 flex flex-col">
+<header class="h-14 flex items-center justify-between p-4 border-b border-neutral-700 bg-neutral-800">
+<div class="flex items-center space-x-2">
+<button class="p-1 rounded hover:bg-neutral-700"><span class="material-icons">chevron_left</span></button>
+<button class="p-1 rounded hover:bg-neutral-700"><span class="material-icons">chevron_right</span></button>
+<span class="font-semibold text-neutral-100 ml-2">Flat</span>
+</div>
+<div class="flex-1 flex justify-center">
+<div class="relative flex items-center">
+<span class="material-icons text-neutral-400 absolute left-2 pointer-events-none">search</span>
+<input class="bg-neutral-800 text-sm focus:outline-none text-neutral-100 placeholder-neutral-400 pl-9 pr-10 py-1.5 rounded-md w-64 border border-neutral-700 focus:border-blue-500" placeholder="Search" type="text"/>
+<span class="material-icons text-neutral-400 absolute right-2 top-1/2 transform -translate-y-1/2 cursor-pointer text-base">expand_more</span>
+</div>
+</div>
+<div class="flex items-center space-x-4">
+<div class="flex items-center space-x-1 text-neutral-400">
+<span class="material-icons text-sm">photo_size_select_small</span>
+<input class="w-24 h-1.5 bg-neutral-600 rounded-lg appearance-none cursor-pointer range-sm accent-blue-500" id="thumbnailSizeSlider" max="300" min="100" type="range" value="200"/>
+<span class="material-icons text-sm">photo_size_select_large</span>
+</div>
+<span class="material-icons">style</span>
+<span class="material-icons">view_list</span>
+<span class="material-icons">info</span>
+</div>
+</header>
+<div class="flex-1 flex overflow-hidden">
+<section class="flex-1 p-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-x-6 gap-y-2 overflow-y-auto" id="imageGrid">
+<div class="flex flex-col mb-2">
+<div class="bg-neutral-700 rounded-lg overflow-hidden aspect-[4/3] relative group">
+<img alt="Illustration of a person working on a laptop in a green environment" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBXbgcvyMpoi2h-yK57RoMMWUCqp27elrobwXfk_89GuuB7IA2Ad1Img-Iue25P7-Ey_Jkr_0mBF1Ef4S5VrHojwmBMBa7yzeJefC30JTrrVRYqmkXTk1luj_lda5RyPUEY8mLJBQ7xtJN8nytFMTXCcVyk6FxOco1vcA2JmffLo68kSd7Lq5qyZZXEtbYUXjaGCejWgUcP32LfV8NZZljwmiWwNisP7FkzACqRav804aI5EQudQyjp1eMr3r6n_a9iEhFSVCxT-y8"/>
+<div class="absolute bottom-1 right-1 bg-blue-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-icons text-xs">check</span>
+</div>
+</div>
+<div class="pt-1.5">
+<h3 class="text-sm font-medium text-neutral-100 truncate">Business by Uran</h3>
+<p class="text-xs text-neutral-400">651.1 KB • JPG</p>
+</div>
+</div>
+<div class="flex flex-col mb-2">
+<div class="bg-neutral-700 rounded-lg overflow-hidden aspect-[4/3] group">
+<img alt="Illustration of a person typing on a laptop with a bird nearby" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuALiUZULoV5TBgU8BPg44QGE2QWiyCogdqZMwY8vHa_ibhqFnXUUlH-1-xk_rit1Gkjs_EGfZMgAMdB4qYsT0t92nuBrcH20XtR8tDbTFIw7SN5aIjKaq10AaZ8kdLkz7OHAbLBHoEMSqUnPmMy6ObAJ77pQUx-7F0hXVbslXzZmmBolhsejdcf4Tflov4HQjQ8rlkCtlrW3txleX37eLXxkG1M40uBQWgoRhtVf-yLV4J8J3cYI6Bd5qgj6p1gO2XEt-ZDm5w5Vc4"/>
+</div>
+<div class="pt-1.5">
+<h3 class="text-sm font-medium text-neutral-100 truncate">Laptop and Bird</h3>
+<p class="text-xs text-neutral-400">720.3 KB • PNG</p>
+</div>
+</div>
+<div class="flex flex-col mb-2">
+<div class="bg-neutral-700 rounded-lg overflow-hidden aspect-[4/3] group">
+<img alt="Illustration of a person sitting at a desk working on a laptop" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBn_mct16MU8oWpGKERURNqmVcUIGsubrb7grVuWuX5HCMflHXGmDpXUmfcuUvPZgtIDxD0jsZqmhaq0zj-u6H5VDfFh3lTcf5Dv8W9jSovnbOBx36oVy8hY6rn1LHszrtc0nfrDgKZJx8y3ivykbgf0chD8p0q80qrVk4Q7hYAJbpQNssDEBIjN7mgnqXquz6t6iA-bI_UZLbRtMtmZUYA72GV6h9z8DRNRh_jRp8-z1hSfh4UmQLSLcgIVin6OFNhYe6SgDb-mkA"/>
+</div>
+<div class="pt-1.5">
+<h3 class="text-sm font-medium text-neutral-100 truncate">Desk Work</h3>
+<p class="text-xs text-neutral-400">588.9 KB • JPG</p>
+</div>
+</div>
+<div class="flex flex-col mb-2">
+<div class="bg-neutral-700 rounded-lg overflow-hidden aspect-[4/3] group flex items-center justify-center">
+<span class="material-icons text-6xl text-neutral-500">picture_as_pdf</span>
+</div>
+<div class="pt-1.5">
+<h3 class="text-sm font-medium text-neutral-100 truncate">Annual Report 2023</h3>
+<p class="text-xs text-neutral-400">2.5 MB • PDF</p>
+</div>
+</div>
+<div class="flex flex-col mb-2">
+<div class="bg-neutral-700 rounded-lg overflow-hidden aspect-[4/3] group">
+<img alt="Illustration of an astronaut looking through a telescope at planets" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBBGt-4CYvqBxuKpR-x5KaaaSHW7ftI_drrwyjSZIHp6tn0ZZcD-fVeEHZrYE_d3cPW-yg3oWy9zaUB2q-mut-iZVjVEKLiaAAZcBxsgifsgn9qUjbIVNL6dApXpEM14z0xzcKabRxC2CbLFrR4HuJPAZED2u9Xtheqqiu3VNNn9YtBJSUIbUcTG-A9xfz2D1k3Cp9Nac0i-U7ziJdgseaBrlvVcUUj8hC27Kaama70yW0YMjbaN2UpNGMD2pP4azODGy4hEP4k3Fs"/>
+</div>
+<div class="pt-1.5">
+<h3 class="text-sm font-medium text-neutral-100 truncate">Space Explorer</h3>
+<p class="text-xs text-neutral-400">912.5 KB • JPG</p>
+</div>
+</div>
+<div class="flex flex-col mb-2">
+<div class="bg-neutral-700 rounded-lg overflow-hidden aspect-[4/3] group flex items-center justify-center">
+<span class="material-icons text-6xl text-neutral-500">view_in_ar</span>
+</div>
+<div class="pt-1.5">
+<h3 class="text-sm font-medium text-neutral-100 truncate">Product Model V3</h3>
+<p class="text-xs text-neutral-400">15.2 MB • OBJ</p>
+</div>
+</div>
+<div class="flex flex-col mb-2">
+<div class="bg-neutral-700 rounded-lg overflow-hidden aspect-[4/3] group">
+<img alt="Illustration of a person working on a phone" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDoRKZOIO-CIa6zDVbl2j1XLjA-UU676tdoM6PiB_tw4jT4vC-XrAgtbWzW6DiHXwNTR2qgOCJZIYBEsYA6B6IPbja1rCZ7c64kLElUDbeFyC0QAV6Mf3t2SmIKrHNkSnJJbHYsv7I_TCkaOQHYmvKTZZznmH_zLfPxzXCgJBpPzTkBQs2_t5QECJpHsHtt-LbqupBlXtmX8TVg1GOJL_ituwTuE2blvWzbBowT5cC0kEqWllBV4x85fZ-cXBeRB2lM2UBm7N8SNd4"/>
+</div>
+<div class="pt-1.5">
+<h3 class="text-sm font-medium text-neutral-100 truncate">Mobile Work</h3>
+<p class="text-xs text-neutral-400">450.2 KB • PNG</p>
+</div>
+</div>
+<div class="flex flex-col mb-2">
+<div class="bg-neutral-700 rounded-lg overflow-hidden aspect-[4/3] group">
+<img alt="Illustration of a person standing with a cat" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBVQl8Muy0ZPtJKJV-XK4A8wRTrqu-pXc6bM6AZ8SkDp7LmTtaXTkUaSvGIGKl1gKYZTpyOvNTWOGOgs-9on4kCk4ez4SdIrd657NLDynXcseVEgT6PzqdX6Zcmgq9MdeQiKwKiywOxhiINvBLdeiBFtXuYd_waKY61u4FA4Y8Xo3M4VMSTfOrbQjOJWTXadi4FFWvsR60VAz-8FPOFb_uqKJnvnbxGkj5pKKAvNfXqhTdxGO8qu-m15WrAzyyQVCdrkp_gZZRsLBY"/>
+</div>
+<div class="pt-1.5">
+<h3 class="text-sm font-medium text-neutral-100 truncate">Person and Cat</h3>
+<p class="text-xs text-neutral-400">689.7 KB • JPG</p>
+</div>
+</div>
+<div class="flex flex-col mb-2">
+<div class="bg-neutral-700 rounded-lg overflow-hidden aspect-[4/3] group">
+<img alt="Illustration of a person using a laptop with a coffee cup" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBHZkbJzu75yaU-w_uoGxBWQtWLHJtraEQB60bv2XUOEE04mL5RoZ8YRP_WDDC-2uKau2udbVnsXnIwnh_o-Rpvlb4cB6rfdidJVLYsO0pq29fcd86jQPHZvPswvplZIMCMNz7zKM5hX8pUfQY3jI4ktW7Eja7EYqWtF5rl4JhJW9Fzo7-ehn76Dg4eV6blIWimqxahzEiNOKyyrORdZtxoYFYO1Z9ClMZ-RtDR7NL32y1Z0SJzH4D_L9Su4tDwPsDF8hhtB75iFoY"/>
+</div>
+<div class="pt-1.5">
+<h3 class="text-sm font-medium text-neutral-100 truncate">Coffee &amp; Laptop</h3>
+<p class="text-xs text-neutral-400">711.0 KB • JPG</p>
+</div>
+</div>
+<div class="flex flex-col mb-2">
+<div class="bg-neutral-700 rounded-lg overflow-hidden aspect-[4/3] group">
+<img alt="Illustration of a person painting on a canvas with a cat" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6KcM8jHYJs6qdKg-xOnk7m3zt90wFfeeMPLD1w5uzyOVuyUdEzXr02J-9hlQTIiJFJG__LlB2qVXZ8RvW-V6MaJ8N5NMJXVleTDVGrYZ7W_ITPzSCy1Bh6-om52mBYgE4cd-yKun_v7a4aPhsTkstcvzL4DtS7zRtv6f-kZv12CfljNciAF1Bq-WN-ZB5z-ms8K2Un4u8Gx9bm_bk6mUaOPFhXhASbRJWGJASwZb2lcrI-3LFhajeXRvAIp2JN9p6Yf8xj0TR8mg"/>
+</div>
+<div class="pt-1.5">
+<h3 class="text-sm font-medium text-neutral-100 truncate">Artist and Cat</h3>
+<p class="text-xs text-neutral-400">805.4 KB • PNG</p>
+</div>
+</div>
+<div class="flex flex-col mb-2">
+<div class="bg-neutral-700 rounded-lg overflow-hidden aspect-[4/3] group">
+<img alt="Illustration of a person gardening with a cat and watering can" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJ1sZQ6VN7twEvUXpJBHGJ6KwG6SaDxlY0nis-k6z-OAEY3u1kas6t1UIndad4ZaYnK6qpuFJJsTFxos4J0gzgVheFpgt3N-slrJ1ppNC1Y_1Zidatog0FVRs1vji01jbvfQk3CaRENNtUzd0LMEvE0DMRmuALeBB98yPRHiFT7gCk8rw1U8nBbcek1Wnf5Y1_0ac8NIfx8lv5mQzTFlCF5fuhOrPvH2Ui-JgqsQOiUg44lrktJ-NjBXYhQxFxtpiXOgo3GXWNoc4"/>
+</div>
+<div class="pt-1.5">
+<h3 class="text-sm font-medium text-neutral-100 truncate">Gardening Fun</h3>
+<p class="text-xs text-neutral-400">753.1 KB • JPG</p>
+</div>
+</div>
+<div class="flex flex-col mb-2">
+<div class="bg-neutral-700 rounded-lg overflow-hidden aspect-[4/3] group">
+<img alt="Illustration of a person reading a book" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBxtfGxIEsgMb_Tywnr4x5HREb8AbU-aHqnILpI3546rCwbjdJE-1bBrJ6jkgjTotH1xBCa84FmKjt1YURqfYpSZ0Isa1u-YkZo6d4QbylgWJCMwR1HrajjbJxOT-nK7O997LQdTUhcQibfGEWktEBTDVV7HxIFnNeMKkqRyVwOl80TBVVNKFWm3198PSXWpCmDNpyRAeq2Hqwn1gW9OOh2Ll6Yb1ymZsn1GsDGlSn8WR-9EP8jp-oisE02yXtZarFw5r68tCIn9mQ"/>
+</div>
+<div class="pt-1.5">
+<h3 class="text-sm font-medium text-neutral-100 truncate">Quiet Reading</h3>
+<p class="text-xs text-neutral-400">501.8 KB • JPG</p>
+</div>
+</div>
+</section>
+<aside class="w-80 bg-neutral-900 border-l border-neutral-700 flex flex-col h-full">
+<div class="flex-grow p-4 space-y-4 overflow-y-auto">
+<div>
+<img alt="Illustration of a person working on a laptop in a green environment" class="w-full rounded-lg mb-3" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGCCgzd2aCW7odDpA-FQj_CP9mHK_izxsm9OsHusUdd2H8dTG382jOK_cbtZHu6z6N4BpkQC1l0sOd5KD7goA23FwVpMBieDvUdHtxHpa9uCHGVxYp1VMVVYRHL7zs1hMZHbvGJ7W_VX6tj5q615WwCve6R9R-aFUdwVtCLuhm2Uvk5kLRZSf6ngF2nmIH2R63qvwSA6CUJdHBYFMonO-2TQlkfnIR_C_iHsDlvz8XlJqjJko01JzGWUpHy0ePwYB003WJl7QrcS0"/>
+<div class="mb-3">
+<h4 class="text-xs text-neutral-400 font-medium mb-1">Color Palette</h4>
+<div class="flex space-x-2">
+<div class="w-6 h-6 rounded-full bg-[#4A7C59] cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-offset-neutral-900 hover:ring-neutral-400"></div>
+<div class="w-6 h-6 rounded-full bg-[#D4E2D4] cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-offset-neutral-900 hover:ring-neutral-400"></div>
+<div class="w-6 h-6 rounded-full bg-[#F2F7F2] cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-offset-neutral-900 hover:ring-neutral-400"></div>
+<div class="w-6 h-6 rounded-full bg-[#A4B0A5] cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-offset-neutral-900 hover:ring-neutral-400"></div>
+<div class="w-6 h-6 rounded-full bg-[#FFC107] cursor-pointer hover:ring-2 hover:ring-offset-2 hover:ring-offset-neutral-900 hover:ring-neutral-400"></div>
+</div>
+</div>
+<input class="w-full bg-neutral-800 border border-neutral-700 rounded-md p-2 text-sm text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-blue-500" type="text" value="Business by Uran"/>
+</div>
+<div>
+<label class="text-xs text-neutral-400 font-medium" for="tags">Tags</label>
+<div class="relative mt-1">
+<input class="w-full bg-neutral-800 border border-neutral-700 rounded-md p-2 text-sm text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-blue-500 pr-10" id="tags" placeholder="Add a tag..." type="text"/>
+<span class="material-icons absolute right-2 top-1/2 transform -translate-y-1/2 text-neutral-400">
+              add
+            </span>
+</div>
+<div class="mt-2 flex flex-wrap gap-2">
+<span class="bg-neutral-700 text-xs px-2 py-1 rounded-full flex items-center">
+              Illustration
+              <button class="ml-1 text-neutral-500 hover:text-neutral-300"><span class="material-icons text-xs">close</span></button>
+</span>
+<span class="bg-neutral-700 text-xs px-2 py-1 rounded-full flex items-center">
+              Flat
+              <button class="ml-1 text-neutral-500 hover:text-neutral-300"><span class="material-icons text-xs">close</span></button>
+</span>
+<span class="bg-neutral-700 text-xs px-2 py-1 rounded-full flex items-center">
+              Uran X
+              <button class="ml-1 text-neutral-500 hover:text-neutral-300"><span class="material-icons text-xs">close</span></button>
+</span>
+<span class="bg-neutral-700 text-xs px-2 py-1 rounded-full flex items-center">
+              Dribbble X
+              <button class="ml-1 text-neutral-500 hover:text-neutral-300"><span class="material-icons text-xs">close</span></button>
+</span>
+</div>
+</div>
+<div>
+<input class="w-full bg-neutral-800 border border-neutral-700 rounded-md p-2 text-sm text-neutral-100 placeholder-neutral-400 focus:outline-none focus:border-blue-500" type="text" value="https://dribbble.com/uranc"/>
+</div>
+<div>
+<h4 class="text-sm font-semibold mb-2 text-neutral-100">Categories</h4>
+<div class="flex flex-wrap gap-2">
+<span class="bg-blue-600 text-white text-xs px-2 py-1 rounded-full flex items-center">
+              Flat
+              <button class="ml-1 text-blue-300 hover:text-white"><span class="material-icons text-xs">close</span></button>
+</span>
+<span class="bg-neutral-700 text-xs px-2 py-1 rounded-full flex items-center">
+              Illustration
+              <button class="ml-1 text-neutral-500 hover:text-neutral-300"><span class="material-icons text-xs">add</span></button>
+</span>
+</div>
+</div>
+<div>
+<h4 class="text-sm font-semibold mb-2 text-neutral-100">Properties</h4>
+<div class="space-y-1 text-sm">
+<div class="flex justify-between">
+<span class="text-neutral-400">Dimensions</span>
+<span>1680 x 1280</span>
+</div>
+<div class="flex justify-between">
+<span class="text-neutral-400">Size</span>
+<span>651.1 KB</span>
+</div>
+<div class="flex justify-between">
+<span class="text-neutral-400">Type</span>
+<span>JPG</span>
+</div>
+<div class="flex justify-between">
+<span class="text-neutral-400">Date Created</span>
+<span>2019/08/12 14:22</span>
+</div>
+<div class="flex justify-between">
+<span class="text-neutral-400">Date Modified</span>
+<span>2019/08/12 14:22</span>
+</div>
+</div>
+</div>
+</div>
+<div class="p-4 mt-auto border-t border-neutral-700">
+<button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-md text-sm transition duration-150">
+          Export...
+        </button>
+</div>
+</aside>
+</div>
+</main>
+<script>
+    // Basic JS for thumbnail size slider (optional, for dynamic sizing)
+    const slider = document.getElementById('thumbnailSizeSlider');
+    const imageGrid = document.getElementById('imageGrid');
+    const defaultImageSize = 200; // Corresponds to aspect-[4/3] and reasonable base
+    // Set initial size based on slider value or a default
+    updateThumbnailSizes(parseInt(slider.value));
+    slider.addEventListener('input', (event) => {
+      updateThumbnailSizes(parseInt(event.target.value));
+    });
+    function updateThumbnailSizes(size) {
+      const items = imageGrid.querySelectorAll('.flex.flex-col > div:first-child'); // Selects the div containing the image/icon
+      items.forEach(item => {
+        item.style.height = `${size}px`;
+        // For icon containers, adjust icon size too
+        const icon = item.querySelector('.material-icons');
+        if (icon) {
+          const iconBaseSize = 6; // text-6xl -> 3.75rem * 16px/rem = 60px.  Adjust for desired scaling.
+          icon.style.fontSize = `${Math.max(24, size / defaultImageSize * iconBaseSize * 0.6)}px`; // Ensure icon doesn't get too small
+        }
+      });
+    }
+    // Initialize sizes
+    updateThumbnailSizes(parseInt(slider.value));
+  </script>
+</body></html>

@@ -1,27 +1,41 @@
+use entity::file_types::ActiveModel;
 use entity::files;
 use notify::event::{CreateKind, EventKind, ModifyKind, RemoveKind, RenameMode};
-use notify::{Error, RecommendedWatcher, RecursiveMode};
+use notify::{Error, Event, RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{
     new_debouncer, DebounceEventResult, DebouncedEvent, Debouncer, RecommendedCache,
 };
-use sea_orm::ActiveValue::Set;
-use std::path::PathBuf;
+use sea_orm::ActiveValue::{self, Set};
+use std::fs::File;
+use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
+use tokio::sync::Mutex;
 
 use crate::file_system::FileId;
 
 #[derive(Debug)]
+pub struct FileEvent {
+    event: DebouncedEvent,
+    kind: EventKind,
+    file_id: FileId,
+}
+
+type Watcher = Option<Debouncer<RecommendedWatcher, RecommendedCache>>;
+type FileEventReceiver =
+    Option<Arc<Mutex<Receiver<std::result::Result<Vec<DebouncedEvent>, Vec<Error>>>>>>;
+#[derive(Debug)]
 pub struct FileWatcher {
-    watcher: Option<Debouncer<RecommendedWatcher, RecommendedCache>>,
-    receiver: Option<Receiver<std::result::Result<Vec<DebouncedEvent>, Vec<Error>>>>,
+    watcher: Watcher,
+    receiver: FileEventReceiver,
 }
 
 impl FileWatcher {
     pub async fn init_watcher(&mut self) {
         let (tx, rx) = tokio::sync::mpsc::channel(100);
         let rt = tokio::runtime::Handle::current();
-
+        let rx = Arc::new(Mutex::new(rx));
         let debouncer = new_debouncer(
             Duration::from_secs(2),
             None,
@@ -46,6 +60,7 @@ impl FileWatcher {
             Err(e) => println!("{:?}", e),
         };
     }
+
     pub async fn new() -> std::result::Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
             watcher: None,
@@ -53,7 +68,7 @@ impl FileWatcher {
         })
     }
 
-    pub async fn watch(&mut self, path: &PathBuf) -> notify::Result<()> {
+    pub async fn watch(&mut self, path: &Path) -> notify::Result<()> {
         println!("Does path exist?");
         if !path.exists() {
             panic!();
@@ -64,24 +79,24 @@ impl FileWatcher {
             watcher.watch(path, RecursiveMode::Recursive)?;
             println!("Watcher ready! {:?}", watcher);
 
-            if let Some(mut rx) = self.receiver.take() {
-                println!("RX taken out of Option: {:?}", rx);
-                tokio::spawn(async move {
-                    println!("Spawned thread! Receiver: {:?}", rx);
-                    while let Some(res) = rx.recv().await {
-                        println!("Received events!");
-                        match res {
-                            Ok(events) => {
-                                Self::to_database(events).await;
-                            }
-                            Err(e) => {
-                                println!("errors: {:?}", e);
-                            }
+            //NOTE: This might be worth to refactor into Arc<Mutex<>>
+            let rx = Arc::clone(self.receiver.as_ref().unwrap());
+            tokio::spawn(async move {
+                println!("Spawned thread! Receiver: {:?}", rx);
+                while let Some(res) = rx.lock().await.recv().await {
+                    println!("Received events!");
+                    match res {
+                        Ok(events) => {
+                            Self::to_database(events).await;
+                        }
+                        Err(e) => {
+                            println!("errors: {:?}", e);
                         }
                     }
-                });
-            }
+                }
+            });
         }
+
         Ok(())
     }
 
@@ -91,6 +106,7 @@ impl FileWatcher {
             match event.kind {
                 EventKind::Create(CreateKind::File) => {
                     let file_id = FileId::extract(event.paths[0].as_path()).await.unwrap();
+
                     println!(
                         "File created at path: {:?}, with ID {:?}",
                         event.paths[0], file_id
@@ -105,5 +121,29 @@ impl FileWatcher {
                 _ => println!("Something else happened!"),
             }
         }
+    }
+}
+
+impl FileEvent {
+    fn new(event: DebouncedEvent, kind: EventKind, file_id: FileId) -> Self {
+        FileEvent {
+            event,
+            kind,
+            file_id,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::FileWatcher;
+    use std::path::Path;
+
+    #[tokio::test]
+    async fn on_create_emit_correct_event() {
+        let path = Path::new("./../../../../test_vault/");
+        let mut watcher = FileWatcher::new().await.unwrap();
+        watcher.init_watcher().await;
+        watcher.watch(path).await.unwrap();
     }
 }

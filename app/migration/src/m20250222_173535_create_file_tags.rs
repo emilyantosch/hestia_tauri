@@ -7,10 +7,11 @@ pub struct Migration;
 enum Files {
     Table,
     _ID,
+    DeviceNum,
+    Inode,
     Name,
     Hash,
     Path,
-    FileSize,
     FileTypeID,
     CreatedAt,
     UpdatedAt,
@@ -47,7 +48,7 @@ enum TagHasTags {
     SuperTagId,
     SubTagId,
 }
-
+// TODO: We still have to reapply the Migration soon, rather than later
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
@@ -65,10 +66,11 @@ impl MigrationTrait for Migration {
                             .to_owned(),
                     )
                     .col(pk_auto(Files::_ID))
+                    .col(pk_auto(Files::DeviceNum))
+                    .col(pk_auto(Files::Inode))
                     .col(string(Files::Name))
                     .col(string(Files::Path))
                     .col(string(Files::Hash))
-                    .col(integer(Files::FileSize))
                     .col(integer(Files::FileTypeID))
                     .col(date_time(Files::CreatedAt))
                     .col(date_time(Files::UpdatedAt))
