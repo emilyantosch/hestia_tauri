@@ -1,5 +1,4 @@
 import { SidebarFolder, Folder } from "../molecules/sidebarFolder";
-import { SidebarQuickAccess } from "../molecules/sidebarQuickAccess";
 import { Sidebar, SidebarContent } from "../ui/sidebar";
 
 let folder: Folder = {
