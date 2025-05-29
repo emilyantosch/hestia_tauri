@@ -6,6 +6,7 @@ use notify_debouncer_full::{
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::fs::File;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::Mutex;
 
@@ -95,7 +96,7 @@ impl FileWatcher {
                     println!("Received events!");
                     match res {
                         Ok(events) => {
-                            Self::to_file_event_and_send(events, p_tx_clone).await;
+                            Self::to_file_event_and_send(events, &p_tx_clone).await;
                         }
                         Err(e) => {
                             println!("errors: {:?}", e);
@@ -110,27 +111,36 @@ impl FileWatcher {
 
     pub async fn to_file_event_and_send(
         events: Vec<DebouncedEvent>,
-        processed_event_tx: Sender<FileEvent>,
+        processed_event_tx: &Sender<FileEvent>,
     ) {
         for event in events {
-            println!("Event unwrapped!");
-            match event.kind {
-                EventKind::Create(CreateKind::File) => {
-                    let file_id = FileId::extract(event.paths[0].as_path()).await.unwrap();
-
-                    println!(
-                        "File created at path: {:?}, with ID {:?}",
-                        event.paths[0], file_id
-                    );
+            let kind = event.kind;
+            let paths = event.paths.to_owned();
+            let file_id = match kind {
+                EventKind::Create(CreateKind::File)
+                | EventKind::Modify(_)
+                | EventKind::Remove(RemoveKind::File) => {
+                    if !paths.is_empty() {
+                        match FileId::extract(event.paths[0].as_path()).await {
+                            Ok(file_id) => file_id,
+                            Err(e) => continue,
+                        }
+                    } else {
+                        continue;
+                    }
                 }
-                EventKind::Create(CreateKind::Folder) => println!("Folder was created!"),
-                EventKind::Modify(ModifyKind::Name(RenameMode::Both)) => {
-                    println!("Rename happened!")
+                EventKind::Create(CreateKind::Folder) => {
+                    if !paths.is_empty() {
+                        match FileId::extract(event.paths[0].as_path()).await {
+                            Ok(file_id) => file_id,
+                            Err(e) => continue,
+                        }
+                    } else {
+                        continue;
+                    }
                 }
-                EventKind::Remove(RemoveKind::File) => println!("Rename happened!"),
-                EventKind::Remove(RemoveKind::Folder) => println!("Rename happened!"),
-                _ => println!("Something else happened!"),
-            }
+                _ => continue,
+            };
         }
     }
 }
