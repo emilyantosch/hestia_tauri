@@ -12,7 +12,7 @@ pub enum FileId {
     },
 }
 impl FileId {
-    pub async fn extract(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn extract(path: impl AsRef<Path>) -> Result<Self, crate::errors::HestiaErrors> {
         use std::os::unix::fs::MetadataExt;
         let metadata = std::fs::metadata(path.as_ref())?;
         Ok(FileId::Inode {
