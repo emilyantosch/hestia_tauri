@@ -105,12 +105,16 @@ impl FileWatcher {
             println!("Event unwrapped!");
             match event.kind {
                 EventKind::Create(CreateKind::File) => {
-                    let file_id = FileId::extract(event.paths[0].as_path()).await.unwrap();
-
-                    println!(
-                        "File created at path: {:?}, with ID {:?}",
-                        event.paths[0], file_id
-                    );
+                    unsafe {
+                        let file_id = FileId::extract(&event.paths[0]).await.unwrap();
+                        println!(
+                            "File created at path: {:?}, with ID {:?}",
+                            event.paths[0], file_id
+                        );
+                    }
+                    
+    
+                    
                 }
                 EventKind::Create(CreateKind::Folder) => println!("Folder was created!"),
                 EventKind::Modify(ModifyKind::Name(RenameMode::Both)) => {

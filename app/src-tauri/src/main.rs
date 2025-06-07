@@ -15,7 +15,7 @@ async fn main() {
     watcher.init_watcher().await;
     watcher
         .watch(&PathBuf::from(
-            "/home/emmi/projects/projects/hestia_tauri/test_vault/",
+            r"C:\Users\parki\Downloads\hestia",
         ))
         .await
         .unwrap();

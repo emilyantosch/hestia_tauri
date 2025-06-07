@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub enum FileId {
@@ -12,6 +12,7 @@ pub enum FileId {
     },
 }
 impl FileId {
+    #[cfg(target_family = "unix")]
     pub async fn extract(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
         use std::os::unix::fs::MetadataExt;
         let metadata = std::fs::metadata(path.as_ref())?;
@@ -22,19 +23,22 @@ impl FileId {
     }
 
     #[cfg(target_family = "windows")]
-    pub async unsafe fn get_file_win_id(path: &PathBuf) -> Result<Self> {
+    pub async unsafe fn extract(path: &PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
         use std::{mem, os::windows::prelude::*};
-        let file = open_file(path)?;
+        let file = Self::open_file(path)?;
+        Ok(FileId::Index {
+            volume_serial_num:0,file_index:0
+        })
     }
 
     #[cfg(target_family = "windows")]
-    fn open_file<P: AsRef<Path>>(path: P) -> Result<fs::File> {
+    fn open_file<P: AsRef<Path>>(path: P) -> Result<std::fs::File, Box<dyn std::error::Error>> {
         use std::{fs::OpenOptions, os::windows::fs::OpenOptionsExt};
         use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
 
-        OpenOptions::new()
+        Ok(OpenOptions::new()
             .access_mode(0)
             .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
-            .open(path)
+            .open(path)?)
     }
 }
