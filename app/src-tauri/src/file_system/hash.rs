@@ -18,24 +18,24 @@ pub struct FolderHash {
     pub file_id: FileId,
 }
 
-impl FileHash {
-    pub async fn compute(path: &Path) -> Result<FileHash, AppError> {
-        let file_id = FileId::extract(path).await?;
+// impl FileHash {
+//     pub async fn compute(path: &Path) -> Result<FileHash, AppError> {
+//         let file_id = FileId::extract(path).await?;
 
-        let content_hash = Self::hash_file_content(path).await?;
+//         let content_hash = Self::hash_file_content(path).await?;
 
-        let identity_hash = Self::hash_identity(
-            &content_hash,
-            &file_id,
-            path.file_name().and_then(|n| n.to_str()).ok_or(HashError {
-                kind: HashErrorKind::InvalidPathError,
-            }),
-        )?;
+//         let identity_hash = Self::hash_identity(
+//             &content_hash,
+//             &file_id,
+//             path.file_name().and_then(|n| n.to_str()).ok_or(HashError {
+//                 kind: HashErrorKind::InvalidPathError,
+//             }),
+//         )?;
 
-        Ok(FileHash {
-            content_hash,
-            identity_hash,
-            file_id,
-        })
-    }
-}
+//         Ok(FileHash {
+//             content_hash,
+//             identity_hash,
+//             file_id,
+//         })
+//     }
+// }

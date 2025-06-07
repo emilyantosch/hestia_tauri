@@ -24,6 +24,7 @@ pub struct FileEvent {
 type RawEventReceiver = Option<
     Arc<Mutex<tokio::sync::mpsc::Receiver<std::result::Result<Vec<DebouncedEvent>, Vec<Error>>>>>,
 >;
+
 #[derive(Debug)]
 pub struct FileWatcher {
     watcher: Option<Debouncer<RecommendedWatcher, RecommendedCache>>,
