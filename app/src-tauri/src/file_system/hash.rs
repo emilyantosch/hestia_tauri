@@ -38,4 +38,14 @@ impl FileHash {
             file_id,
         })
     }
+
+    pub async fn hash_file_content<T>(path: T) -> Result<Blake3Hash, HashError>
+    where
+        T: AsRef<Path>,
+    {
+        let content = async_fs::read(path.as_ref().into()).await?;
+        let mut hasher = Hasher::new();
+        hasher.update(&content);
+        Ok(hasher.finalize())
+    }
 }

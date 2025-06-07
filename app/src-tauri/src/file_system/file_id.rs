@@ -12,6 +12,7 @@ pub enum FileId {
     },
 }
 impl FileId {
+    #[cfg(target_family = "unix")]
     pub async fn extract(path: impl AsRef<Path>) -> Result<Self, crate::errors::FileError> {
         use std::os::unix::fs::MetadataExt;
         let metadata = std::fs::metadata(path.as_ref())?;
