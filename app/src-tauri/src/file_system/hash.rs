@@ -43,7 +43,7 @@ impl FileHash {
     where
         T: AsRef<Path>,
     {
-        let content = async_fs::read(path.as_ref().into()).await?;
+        let mut content = async_fs::read(path.as_ref().into()).await?;
         let mut hasher = Hasher::new();
         hasher.update(&content);
         Ok(hasher.finalize())
