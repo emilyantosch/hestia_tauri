@@ -12,7 +12,7 @@ pub enum FileId {
     },
 }
 impl FileId {
-    pub async fn extract(path: impl AsRef<Path>) -> Result<Self, crate::errors::HestiaErrors> {
+    pub async fn extract(path: impl AsRef<Path>) -> Result<Self, crate::errors::FileError> {
         use std::os::unix::fs::MetadataExt;
         let metadata = std::fs::metadata(path.as_ref())?;
         Ok(FileId::Inode {
@@ -36,5 +36,33 @@ impl FileId {
             .access_mode(0)
             .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
             .open(path)
+    }
+}
+
+impl PartialEq for FileId {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                FileId::Inode {
+                    device_id: dev1,
+                    inode_num: num1,
+                },
+                FileId::Inode {
+                    device_id: dev2,
+                    inode_num: num2,
+                },
+            ) => dev1 == dev2 && num1 == num2,
+            (
+                FileId::Index {
+                    volume_serial_num: vol1,
+                    file_index: idx1,
+                },
+                FileId::Index {
+                    volume_serial_num: vol2,
+                    file_index: idx2,
+                },
+            ) => vol1 == vol2 && idx1 == idx2,
+            _ => false,
+        }
     }
 }

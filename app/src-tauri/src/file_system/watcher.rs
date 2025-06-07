@@ -29,7 +29,7 @@ pub struct FileWatcher {
     watcher: Option<Debouncer<RecommendedWatcher, RecommendedCache>>,
     raw_event_receiver: RawEventReceiver,
     processed_event_sender: Option<Sender<FileEvent>>,
-    pub processed_event_receiver: Option<Arc<Mutex<tokio::sync::mpsc::Receiver<FileEvent>>>>,
+    pub processed_event_receiver: Arc<Mutex<Option<tokio::sync::mpsc::Receiver<FileEvent>>>>,
 }
 
 impl FileWatcher {
@@ -39,7 +39,7 @@ impl FileWatcher {
         let (p_tx, p_rx) = tokio::sync::mpsc::channel::<FileEvent>(100);
         let r_rx_arc = Arc::new(Mutex::new(r_rx));
 
-        self.processed_event_receiver = Some(Arc::new(Mutex::new(p_rx)));
+        self.processed_event_receiver = Arc::new(Mutex::new(Some(p_rx)));
         self.processed_event_sender = Some(p_tx);
 
         let debouncer = new_debouncer(
@@ -70,17 +70,16 @@ impl FileWatcher {
             watcher: None,
             raw_event_receiver: None,
             processed_event_sender: None,
-            processed_event_receiver: None,
+            processed_event_receiver: Arc::new(Mutex::new(None)),
         })
     }
 
     pub async fn watch(&mut self, path: &Path) -> Result<(), FileError> {
         if !path.exists() {
-            let error_vec = Vec::new();
-            error_vec.push(path.to_path_buf());
+            let error_path = vec![path.to_path_buf()];
             return Err(FileError::new(
-                FileErrorKind::PathNotFoundError("The path has not been found".to_string()),
-                Some(error_vec),
+                FileErrorKind::PathNotFoundError,
+                Some(error_path),
             ));
         }
         println!("Watching path: {:?}", path);
@@ -224,8 +223,8 @@ mod tests {
         // The debouncer is set to 2 seconds, plus some buffer
         tokio::time::sleep(Duration::from_secs(3)).await;
 
-        let mut receiver_lock = watcher.processed_event_receiver.unwrap().lock().await;
-        if let ref mut rx = *receiver_lock {
+        let mut receiver_lock = watcher.processed_event_receiver.lock().await;
+        if let Some(ref mut rx) = *receiver_lock {
             match tokio::time::timeout(Duration::from_secs(1), rx.recv()).await {
                 Ok(Some(event)) => {
                     assert!(matches!(event.kind, EventKind::Create(CreateKind::File)));
@@ -264,8 +263,8 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
 
         // 3. Drain initial create events
-        let mut receiver_lock_drain = watcher.processed_event_receiver.unwrap().lock().await;
-        if let ref mut rx_drain = *receiver_lock_drain {
+        let mut receiver_lock_drain = watcher.processed_event_receiver.lock().await;
+        if let Some(ref mut rx_drain) = *receiver_lock_drain {
             println!("Draining initial events...");
             let mut drained_count = 0;
             loop {
@@ -300,8 +299,8 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(3)).await;
 
         // 6. Receive and assert the modify event
-        let mut receiver_lock_modify = watcher.processed_event_receiver.unwrap().lock().await;
-        if let ref mut rx_modify = *receiver_lock_modify {
+        let mut receiver_lock_modify = watcher.processed_event_receiver.lock().await;
+        if let Some(ref mut rx_modify) = *receiver_lock_modify {
             match tokio::time::timeout(Duration::from_secs(2), rx_modify.recv()).await {
                 Ok(Some(event)) => {
                     println!("Received event after modify: {:?}", event);
@@ -348,8 +347,8 @@ mod tests {
         // 3. Wait and drain initial create events
         tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
 
-        let mut receiver_lock_drain = watcher.processed_event_receiver.unwrap().lock().await;
-        if let ref mut rx_drain = *receiver_lock_drain {
+        let mut receiver_lock_drain = watcher.processed_event_receiver.lock().await;
+        if let Some(ref mut rx_drain) = *receiver_lock_drain {
             println!("Draining initial events for deletion test...");
             let mut drained_count = 0;
             loop {
@@ -383,8 +382,9 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
 
         // 6. Receive and assert the delete event
-        let mut receiver_lock_delete = watcher.processed_event_receiver.unwrap().lock().await;
-        if let ref mut rx_delete = *receiver_lock_delete {
+        let mut receiver_lock_delete = watcher.processed_event_receiver.lock().await;
+        println!("Processed Event Receiver has been acquired!");
+        if let Some(ref mut rx_delete) = *receiver_lock_delete {
             match tokio::time::timeout(Duration::from_secs(2), rx_delete.recv()).await {
                 Ok(Some(event)) => {
                     println!("Received event after delete: {:?}", event);
@@ -397,7 +397,7 @@ mod tests {
                     // Assert path is correct
                     assert_eq!(event.paths, vec![file_path.clone()]);
                     // Assert FileId is correct (should be from_path as file is deleted)
-                    let expected_file_id = FileId::extract(&file_path);
+                    let expected_file_id = FileId::extract(&file_path).await.unwrap();
                     assert_eq!(
                         event.file_id, expected_file_id,
                         "FileId did not match expected from_path ID"
@@ -433,8 +433,8 @@ mod tests {
         // 3. Wait and drain initial create events
         tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
 
-        let mut receiver_lock_drain = watcher.processed_event_receiver.unwrap().lock().await;
-        if let ref mut rx_drain = *receiver_lock_drain {
+        let mut receiver_lock_drain = watcher.processed_event_receiver.lock().await;
+        if let Some(ref mut rx_drain) = *receiver_lock_drain {
             println!("Draining initial events for rename test...");
             let mut drained_count = 0;
             loop {
@@ -471,8 +471,8 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
 
         // 6. Receive and assert the rename event
-        let mut receiver_lock_rename = watcher.processed_event_receiver.unwrap().lock().await;
-        if let ref mut rx_rename = *receiver_lock_rename {
+        let mut receiver_lock_rename = watcher.processed_event_receiver.lock().await;
+        if let Some(ref mut rx_rename) = *receiver_lock_rename {
             match tokio::time::timeout(Duration::from_secs(2), rx_rename.recv()).await {
                 Ok(Some(event)) => {
                     println!("Received event after rename: {:?}", event);
@@ -495,7 +495,7 @@ mod tests {
                         "Event paths did not match expected [old_path, new_path]"
                     );
                     // Assert FileId is based on the new path
-                    let expected_file_id = FileId::extract(&new_file_path);
+                    let expected_file_id = FileId::extract(&new_file_path).await.unwrap();
                     assert_eq!(
                         event.file_id, expected_file_id,
                         "FileId did not match expected from_path for new_file_path"
@@ -534,9 +534,8 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
 
         // 5. Receive and assert the folder creation event
-        let mut receiver_lock_folder_create =
-            watcher.processed_event_receiver.unwrap().lock().await;
-        if let ref mut rx_folder_create = *receiver_lock_folder_create {
+        let mut receiver_lock_folder_create = watcher.processed_event_receiver.lock().await;
+        if let Some(ref mut rx_folder_create) = *receiver_lock_folder_create {
             match tokio::time::timeout(Duration::from_secs(2), rx_folder_create.recv()).await {
                 Ok(Some(event)) => {
                     println!("Received event after folder create: {:?}", event);
@@ -549,7 +548,7 @@ mod tests {
                     // Assert path is correct
                     assert_eq!(event.paths, vec![folder_path.clone()]);
                     // Assert oileId is based on the folder path
-                    let expected_file_id = FileId::extract(&folder_path);
+                    let expected_file_id = FileId::extract(&folder_path).await.unwrap();
                     assert_eq!(
                         event.file_id, expected_file_id,
                         "FileId did not match expected from_path for new_folder_path"
@@ -583,8 +582,8 @@ mod tests {
         // 3. Wait and drain initial folder creation events
         tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
 
-        let mut receiver_lock_drain = watcher.processed_event_receiver.unwrap().lock().await;
-        if let ref mut rx_drain = *receiver_lock_drain {
+        let mut receiver_lock_drain = watcher.processed_event_receiver.lock().await;
+        if let Some(ref mut rx_drain) = *receiver_lock_drain {
             println!("Draining initial events for folder delete test...");
             let mut drained_count = 0;
             loop {
@@ -617,9 +616,8 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
 
         // 6. Receive and assert the folder delete event
-        let mut receiver_lock_folder_delete =
-            watcher.processed_event_receiver.unwrap().lock().await;
-        if let ref mut rx_folder_delete = *receiver_lock_folder_delete {
+        let mut receiver_lock_folder_delete = watcher.processed_event_receiver.lock().await;
+        if let Some(ref mut rx_folder_delete) = *receiver_lock_folder_delete {
             match tokio::time::timeout(Duration::from_secs(2), rx_folder_delete.recv()).await {
                 Ok(Some(event)) => {
                     println!("Received event after folder delete: {:?}", event);
@@ -632,7 +630,7 @@ mod tests {
                     // Assert path is correct
                     assert_eq!(event.paths, vec![folder_path.clone()]);
                     // Assert FileId is based on the folder path
-                    let expected_file_id = FileId::extract(&folder_path);
+                    let expected_file_id = FileId::extract(&folder_path).await.unwrap();
                     assert_eq!(
                         event.file_id, expected_file_id,
                         "FileId did not match expected from_path for deleted_folder_path"
@@ -668,8 +666,8 @@ mod tests {
         // 3. Wait and drain initial folder creation events
         tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
 
-        let mut receiver_lock_drain = watcher.processed_event_receiver.unwrap().lock().await;
-        if let ref mut rx_drain = *receiver_lock_drain {
+        let mut receiver_lock_drain = watcher.processed_event_receiver.lock().await;
+        if let Some(ref mut rx_drain) = *receiver_lock_drain {
             println!("Draining initial events for folder rename test...");
             let mut drained_count = 0;
             loop {
@@ -705,9 +703,8 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
 
         // 6. Receive and assert the folder rename event
-        let mut receiver_lock_folder_rename =
-            watcher.processed_event_receiver.unwrap().lock().await;
-        if let ref mut rx_folder_rename = *receiver_lock_folder_rename {
+        let mut receiver_lock_folder_rename = watcher.processed_event_receiver.lock().await;
+        if let Some(ref mut rx_folder_rename) = *receiver_lock_folder_rename {
             match tokio::time::timeout(Duration::from_secs(2), rx_folder_rename.recv()).await {
                 Ok(Some(event)) => {
                     println!("Received event after folder rename: {:?}", event);
@@ -727,7 +724,7 @@ mod tests {
                         "Event paths did not match expected [old_folder_path, new_folder_path]"
                     );
                     // Assert FileId is based on the new folder path
-                    let expected_file_id = FileId::extract(&new_folder_path);
+                    let expected_file_id = FileId::extract(&new_folder_path).await.unwrap();
                     assert_eq!(
                         event.file_id, expected_file_id,
                         "FileId did not match expected from_path for new_folder_path"
@@ -764,12 +761,11 @@ mod tests {
             result.is_err(),
             "Watching a non-existent path should return an error."
         );
-
         // 6. Assert that the kind of the notify::Error is notify::ErrorKind::PathNotFound
         if let Err(err) = result {
             assert_eq!(
                 err.kind,
-                notify::ErrorKind::PathNotFound,
+                FileErrorKind::PathNotFoundError,
                 "Error kind should be PathNotFound for a non-existent watch path."
             );
         } else {

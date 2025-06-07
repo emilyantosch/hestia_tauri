@@ -3,7 +3,7 @@
 
 mod errors;
 mod file_system;
-use errors::file::HestiaErrors;
+use crate::AppError;
 use std::path::PathBuf;
 
 use crate::errors::*;
