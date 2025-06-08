@@ -3,12 +3,12 @@ use std::path::Path;
 #[derive(Debug)]
 pub enum FileId {
     Inode {
-        device_id: u64,
-        inode_num: u64,
+        pub device_id: u64,
+        pub inode_num: u64,
     },
     Index {
-        volume_serial_num: u32,
-        file_index: u64,
+        pub volume_serial_num: u32,
+        pub file_index: u64,
     },
 }
 impl FileId {
