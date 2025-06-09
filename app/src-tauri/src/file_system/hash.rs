@@ -1,4 +1,5 @@
 use blake3::{Hash as Blake3Hash, Hasher};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::errors::AppError;
@@ -92,5 +93,10 @@ impl FolderHash {
     pub async fn hash(path: Path) -> Result<FolderHash, AppError> {
         let mut hasher = Hasher::new();
         let file_id = FileId::extract(path).await?;
+
+        let structure_hash = 
+    }
+pub async fn hash_structure(children: &BTreeMap<String, (bool, Blake3Hash)>) -> Result<Blake3Hash, HashError> 
+
     }
 }
