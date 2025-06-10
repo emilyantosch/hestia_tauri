@@ -1,7 +1,7 @@
 use async_recursion::async_recursion;
 use blake3::{Hash as Blake3Hash, Hasher};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tokio::fs as async_fs;
 
 use crate::errors::AppError;

@@ -79,6 +79,7 @@ impl FileWatcher {
             let error_path = vec![path.to_path_buf()];
             return Err(FileError::new(
                 FileErrorKind::PathNotFoundError,
+                format!("Path could not be found: {:?}", path),
                 Some(error_path),
             ));
         }
