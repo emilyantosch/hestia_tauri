@@ -2004,7 +2004,7 @@ name = "hestia_tauri"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-fs",
+ "async-recursion",
  "blake3",
  "entity",
  "notify",

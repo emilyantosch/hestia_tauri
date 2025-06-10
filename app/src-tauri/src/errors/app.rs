@@ -2,10 +2,13 @@ use std::fmt;
 
 use thiserror::Error;
 
+use crate::errors::{FileError, HashError};
+
 #[derive(Debug, Clone)]
 enum AppErrorKind {
     FileError,
     DbError,
+    HashError,
 }
 
 impl std::fmt::Display for AppErrorKind {
@@ -22,4 +25,24 @@ pub enum AppError {
         message: String,
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
+}
+
+impl From<HashError> for AppError {
+    fn from(hash_error: HashError) -> AppError {
+        AppError::Categorized {
+            kind: AppErrorKind::HashError,
+            message: hash_error.message.clone(),
+            source: Some(Box::new(hash_error)),
+        }
+    }
+}
+
+impl From<FileError> for AppError {
+    fn from(file_error: FileError) -> AppError {
+        AppError::Categorized {
+            kind: AppErrorKind::FileError,
+            message: file_error.message.clone(),
+            source: Some(Box::new(file_error)),
+        }
+    }
 }
