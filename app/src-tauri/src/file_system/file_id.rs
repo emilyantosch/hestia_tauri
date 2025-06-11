@@ -1,3 +1,4 @@
+use crate::errors::{FileError, FileErrorKind};
 use std::path::Path;
 
 #[derive(Debug)]
@@ -13,9 +14,18 @@ pub enum FileId {
 }
 impl FileId {
     #[cfg(target_family = "unix")]
-    pub async fn extract(path: impl AsRef<Path>) -> Result<Self, crate::errors::FileError> {
+    pub async fn extract(path: impl AsRef<Path>) -> Result<Self, FileError> {
         use std::os::unix::fs::MetadataExt;
-        let metadata = std::fs::metadata(path.as_ref())?;
+
+        use crate::errors::FileError;
+        let metadata = std::fs::metadata(path.as_ref()).map_err(|e| {
+            FileError::with_source(
+                FileErrorKind::FileIdExtractionError,
+                format!("The FileId could not get extracted: {:?}", e.to_string()),
+                e,
+                Some(vec![path.as_ref().into()]),
+            )
+        })?;
         Ok(FileId::Inode {
             device_id: metadata.dev(),
             inode_num: metadata.ino(),

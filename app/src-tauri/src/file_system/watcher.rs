@@ -1,4 +1,5 @@
-use crate::errors::{FileError, FileErrorKind};
+use crate::errors::{AppError, AppErrorKind, FileError, FileErrorKind};
+use crate::file_system::FileHash;
 use notify::event::{CreateKind, EventKind, ModifyKind, RemoveKind, RenameMode};
 use notify::{Error, RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{
@@ -18,7 +19,7 @@ pub struct FileEvent {
     event: DebouncedEvent,
     paths: Vec<PathBuf>,
     kind: EventKind,
-    file_id: FileId,
+    hash: FileHash,
 }
 
 type RawEventReceiver = Option<
@@ -74,19 +75,27 @@ impl FileWatcher {
         })
     }
 
-    pub async fn watch(&mut self, path: &Path) -> Result<(), FileError> {
+    pub async fn watch(&mut self, path: &Path) -> Result<(), AppError> {
         if !path.exists() {
             let error_path = vec![path.to_path_buf()];
             return Err(FileError::new(
                 FileErrorKind::PathNotFoundError,
                 format!("Path could not be found: {:?}", path),
                 Some(error_path),
-            ));
+            )
+            .into());
         }
         println!("Watching path: {:?}", path);
 
         if let Some(watcher) = self.watcher.as_mut() {
-            watcher.watch(path, RecursiveMode::Recursive)?;
+            watcher.watch(path, RecursiveMode::Recursive).map_err(|e| {
+                FileError::with_source(
+                    FileErrorKind::WatchNotFoundError,
+                    format!("Failed to watch directory: {:?}", e.to_string()),
+                    e,
+                    Some(vec![path.into()]),
+                )
+            })?;
             println!("Watcher ready! {:?}", watcher);
 
             let r_rx_clone = Arc::clone(self.raw_event_receiver.as_ref().unwrap());
@@ -103,7 +112,13 @@ impl FileWatcher {
                     println!("Received events!");
                     match res {
                         Ok(events) => {
-                            Self::to_file_event_and_send(events, &p_tx_clone).await;
+                            for event in events {
+                                if let Err(e) =
+                                    Self::to_file_event_and_send(event, &p_tx_clone).await
+                                {
+                                    eprintln!("Failed to process event: {:?}", e);
+                                }
+                            }
                         }
                         Err(e) => {
                             println!("errors: {:?}", e);
@@ -117,70 +132,31 @@ impl FileWatcher {
     }
 
     async fn to_file_event_and_send(
-        events: Vec<DebouncedEvent>,
+        event: DebouncedEvent,
         processed_event_tx: &Sender<FileEvent>,
-    ) {
-        for event in events {
-            let kind = event.kind;
-            let paths = event.paths.to_owned();
-            let file_id = match kind {
-                EventKind::Create(CreateKind::File)
-                | EventKind::Modify(_)
-                | EventKind::Remove(RemoveKind::File) => {
-                    if !paths.is_empty() {
-                        match FileId::extract(event.paths[0].as_path()).await {
-                            Ok(file_id) => file_id,
-                            Err(e) => {
-                                println!("Error occurred: {:?}", e);
-                                continue;
-                            }
-                        }
-                    } else {
-                        continue;
-                    }
-                }
-                EventKind::Create(CreateKind::Folder) => {
-                    if !paths.is_empty() {
-                        match FileId::extract(event.paths[0].as_path()).await {
-                            Ok(file_id) => file_id,
-                            Err(e) => continue,
-                        }
-                    } else {
-                        continue;
-                    }
-                }
-                EventKind::Remove(RemoveKind::Folder) => {
-                    if !paths.is_empty() {
-                        match FileId::extract(event.paths[0].as_path()).await {
-                            Ok(file_id) => file_id,
-                            Err(e) => continue,
-                        }
-                    } else {
-                        continue;
-                    }
-                }
-                _ => continue,
-            };
+    ) -> Result<(), AppError> {
+        let kind = event.kind;
+        let paths = event.paths.to_owned();
+        let hash = FileHash::hash(&paths[0]).await?;
+        let file_event = FileEvent::new(event, kind, paths, hash);
+        println!("Constructed FileEvent from Raw Stream");
 
-            let file_event = FileEvent::new(event, kind, file_id, paths);
-            println!("Constructed FileEvent from Raw Stream");
-
-            if let Err(e) = processed_event_tx.send(file_event).await {
-                println!("Error sending processed event into channel: {:?}", e);
-            } else {
-                println!("Sending processed event successful")
-            }
+        if let Err(e) = processed_event_tx.send(file_event).await {
+            println!("Error sending processed event into channel: {:?}", e);
+        } else {
+            println!("Sending processed event successful")
         }
+        Ok(())
     }
 }
 
 impl FileEvent {
-    fn new(event: DebouncedEvent, kind: EventKind, file_id: FileId, paths: Vec<PathBuf>) -> Self {
+    fn new(event: DebouncedEvent, kind: EventKind, paths: Vec<PathBuf>, hash: FileHash) -> Self {
         FileEvent {
             event,
             paths,
             kind,
-            file_id,
+            hash,
         }
     }
 }
@@ -233,7 +209,7 @@ mod tests {
                     // Further assertions on file_id if necessary,
                     // e.g. check if it's not default or matches expected hash
                     let expected_file_id = FileId::extract(&file_path).await.unwrap();
-                    assert_eq!(event.file_id, expected_file_id);
+                    assert_eq!(event.hash.file_id, expected_file_id);
                 }
                 Ok(None) => panic!("Processed event channel closed prematurely"),
                 Err(_) => panic!("Timeout waiting for processed event for create"),
@@ -317,7 +293,7 @@ mod tests {
                     let expected_file_id = FileId::extract(&file_path)
                         .await
                         .expect("Failed to extract FileId for modified file");
-                    assert_eq!(event.file_id, expected_file_id);
+                    assert_eq!(event.hash.file_id, expected_file_id);
                 }
                 Ok(None) => {
                     panic!("Processed event channel closed prematurely before modify event")
@@ -400,7 +376,7 @@ mod tests {
                     // Assert FileId is correct (should be from_path as file is deleted)
                     let expected_file_id = FileId::extract(&file_path).await.unwrap();
                     assert_eq!(
-                        event.file_id, expected_file_id,
+                        event.hash.file_id, expected_file_id,
                         "FileId did not match expected from_path ID"
                     );
                 }
@@ -498,7 +474,7 @@ mod tests {
                     // Assert FileId is based on the new path
                     let expected_file_id = FileId::extract(&new_file_path).await.unwrap();
                     assert_eq!(
-                        event.file_id, expected_file_id,
+                        event.hash.file_id, expected_file_id,
                         "FileId did not match expected from_path for new_file_path"
                     );
                 }
@@ -551,7 +527,7 @@ mod tests {
                     // Assert oileId is based on the folder path
                     let expected_file_id = FileId::extract(&folder_path).await.unwrap();
                     assert_eq!(
-                        event.file_id, expected_file_id,
+                        event.hash.file_id, expected_file_id,
                         "FileId did not match expected from_path for new_folder_path"
                     );
                 }
@@ -633,7 +609,7 @@ mod tests {
                     // Assert FileId is based on the folder path
                     let expected_file_id = FileId::extract(&folder_path).await.unwrap();
                     assert_eq!(
-                        event.file_id, expected_file_id,
+                        event.hash.file_id, expected_file_id,
                         "FileId did not match expected from_path for deleted_folder_path"
                     );
                 }
@@ -727,7 +703,7 @@ mod tests {
                     // Assert FileId is based on the new folder path
                     let expected_file_id = FileId::extract(&new_folder_path).await.unwrap();
                     assert_eq!(
-                        event.file_id, expected_file_id,
+                        event.hash.file_id, expected_file_id,
                         "FileId did not match expected from_path for new_folder_path"
                     );
                 }
@@ -764,9 +740,16 @@ mod tests {
         );
         // 6. Assert that the kind of the notify::Error is notify::ErrorKind::PathNotFound
         if let Err(err) = result {
+            let kind = match err {
+                AppError::Categorized {
+                    kind,
+                    message,
+                    source,
+                } => kind,
+            };
             assert_eq!(
-                err.kind,
-                FileErrorKind::PathNotFoundError,
+                kind,
+                AppErrorKind::FileError,
                 "Error kind should be PathNotFound for a non-existent watch path."
             );
         } else {

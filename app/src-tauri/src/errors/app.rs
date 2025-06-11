@@ -4,8 +4,14 @@ use thiserror::Error;
 
 use crate::errors::{FileError, HashError};
 
+impl PartialEq for AppErrorKind {
+    fn eq(&self, other: &Self) -> bool {
+        std::mem::discriminant(self) == std::mem::discriminant(other)
+    }
+}
+
 #[derive(Debug, Clone)]
-enum AppErrorKind {
+pub enum AppErrorKind {
     FileError,
     DbError,
     HashError,

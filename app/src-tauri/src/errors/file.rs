@@ -14,7 +14,7 @@ pub struct FileError {
 pub enum FileErrorKind {
     GenericError,
     Io,
-    FileIdExtractionError(String),
+    FileIdExtractionError,
     HashError,
     PathNotFoundError,
     FileHashError(String),
@@ -38,8 +38,8 @@ impl std::fmt::Display for FileError {
 impl From<std::io::Error> for FileError {
     fn from(other: std::io::Error) -> Self {
         FileError {
-            kind: FileErrorKind::FileIdExtractionError(other.kind().to_string()),
-            message: format!("An IO error occured!"),
+            kind: FileErrorKind::FileIdExtractionError,
+            message: format!("An IO error occured: {:?}", other),
             source: Some(Box::new(other)),
             paths: None,
         }
@@ -75,6 +75,22 @@ impl FileError {
             paths,
         }
     }
+    pub fn with_source<E>(
+        kind: FileErrorKind,
+        message: String,
+        source: E,
+        paths: Option<Vec<PathBuf>>,
+    ) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        FileError {
+            kind,
+            message,
+            source: Some(Box::new(source)),
+            paths,
+        }
+    }
 }
 
 impl PartialEq<notify::ErrorKind> for FileErrorKind {
@@ -96,17 +112,3 @@ impl PartialEq for FileErrorKind {
         std::mem::discriminant(self) == std::mem::discriminant(other)
     }
 }
-
-// impl PartialEq for FileErrorKind {
-//     fn eq(&self, other: &Self) -> bool {
-//         matches!((self, other),
-//             (FileErrorKind::GenericError(_), FileErrorKind::GenericError(_)),
-//             (FileErrorKind::Io(_), FileErrorKind(_)),
-//             (FileErrorKind::PathNotFoundError, FileErrorKind::PathNotFoundError),
-//             (FileErrorKind::InvalidConfigError, FileErrorKind::InvalidConfigError),
-//             (FileErrorKind::MaxFilesWatchError, FileErrorKind::MaxFilesWatchError),
-//             (FileErrorKind::WatchNotFoundError, FileErrorKind::WatchNotFoundError),
-//             _ => false,
-//         )
-//     }
-// }

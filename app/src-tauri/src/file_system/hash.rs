@@ -8,12 +8,14 @@ use crate::errors::AppError;
 use crate::errors::{HashError, HashErrorKind};
 use crate::file_system::FileId;
 
+#[derive(Debug)]
 pub struct FileHash {
     pub content_hash: Blake3Hash,
     pub identity_hash: Blake3Hash,
     pub file_id: FileId,
 }
 
+#[derive(Debug)]
 pub struct FolderHash {
     pub structure_hash: Blake3Hash,
     pub content_hash: Blake3Hash,
