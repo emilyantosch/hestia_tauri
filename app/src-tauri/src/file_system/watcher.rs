@@ -106,6 +106,8 @@ impl FileWatcher {
                 .expect("Processed event handler has not been initialized")
                 .clone();
 
+            let p_rx_clone = Arc::clone(&self.processed_event_receiver);
+
             tokio::spawn(async move {
                 println!("Spawned thread! Raw Receiver: {:?}", r_rx_clone);
                 while let Some(res) = r_rx_clone.lock().await.recv().await {
@@ -126,6 +128,10 @@ impl FileWatcher {
                     }
                 }
             });
+            tokio::spawn(async move {
+                while let res = p_rx_clone
+
+            })
         }
 
         Ok(())
