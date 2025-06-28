@@ -18,6 +18,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+argon2 = { version = "0.6.0-rc.0", features = [] }
+password-hash = { version = "0.6.0-rc.1", features = ["rand_core"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
@@ -25,11 +27,21 @@ serde_json = "1"
 tokio = { version = "*", features = ["full"] }
 notify = "8.0.0"
 notify-debouncer-full = "0.5.0"
-rfd = { version = "*", default-features = false, features = ["tokio", "xdg-portal"] }
-entity = {path = "../entity"}
-sea-orm = {version = "1.1.10"}
+rfd = { version = "*", default-features = false, features = [
+  "tokio",
+  "xdg-portal",
+] }
+entity = { path = "../entity" }
+sea-orm = { version = "1.1.10" }
 anyhow = "1.0.98"
 thiserror = "2.0.12"
 tempfile = "3.20.0"
 blake3 = "1.8.2"
 async-recursion = "1.1.1"
+secrecy = "0.10.3"
+cfg-if = "1.0.1"
+keyring = "3.6.2"
+toml = "0.8.23"
+dirs = "6.0.0"
+aes-gcm = "0.10.3"
+rand = "0.9.1"
