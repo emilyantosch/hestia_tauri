@@ -35,7 +35,7 @@ pub struct SqliteConfig {
 }
 
 #[derive(Serialize, Deserialize)]
-struct PostgresConfig {
+pub struct PostgresConfig {
     pub host: String,
     pub port: u16,
     pub database: String,
@@ -485,8 +485,12 @@ impl PostgresConfig {
 
 impl Default for SqliteConfig {
     fn default() -> Self {
+        // Use a default path relative to the app directory
+        let app_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let db_path = app_dir.join("main.sqlite3");
+        
         Self {
-            file_path: PathBuf::from("hestia.db"),
+            file_path: db_path,
             create_if_missing: true,
             connection_timeout_ms: 5000,
             journal_mode: SqliteJournalMode::Wal,

@@ -48,7 +48,6 @@ impl ActiveModelBehavior for ActiveModel {
     where
         C: ConnectionTrait,
     {
-        let x = 10;
         if insert {
             println!("Inserting")
         } else {

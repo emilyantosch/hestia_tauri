@@ -1,3 +1,4 @@
+use crate::database::FileOperations;
 use crate::errors::{AppError, AppErrorKind, DbError, FileError, FileErrorKind};
 use crate::file_system::FileHash;
 use notify::event::{CreateKind, EventKind, ModifyKind, RemoveKind, RenameMode};
@@ -25,12 +26,12 @@ pub struct FileEvent {
 type RawEventReceiver = Option<
     Arc<Mutex<tokio::sync::mpsc::Receiver<std::result::Result<Vec<DebouncedEvent>, Vec<Error>>>>>,
 >;
-#[derive(Debug)]
 pub struct FileWatcher {
     watcher: Option<Debouncer<RecommendedWatcher, RecommendedCache>>,
     raw_event_receiver: RawEventReceiver,
     processed_event_sender: Option<Sender<FileEvent>>,
     pub processed_event_receiver: Arc<Mutex<Option<tokio::sync::mpsc::Receiver<FileEvent>>>>,
+    db_operations: Option<Arc<FileOperations>>,
 }
 
 impl FileWatcher {
@@ -72,6 +73,19 @@ impl FileWatcher {
             raw_event_receiver: None,
             processed_event_sender: None,
             processed_event_receiver: Arc::new(Mutex::new(None)),
+            db_operations: None,
+        })
+    }
+
+    pub async fn new_with_database(
+        db_operations: Arc<FileOperations>,
+    ) -> std::result::Result<Self, Box<dyn std::error::Error>> {
+        Ok(Self {
+            watcher: None,
+            raw_event_receiver: None,
+            processed_event_sender: None,
+            processed_event_receiver: Arc::new(Mutex::new(None)),
+            db_operations: Some(db_operations),
         })
     }
 
@@ -126,10 +140,13 @@ impl FileWatcher {
                     }
                 }
             });
+            let db_ops_clone = self.db_operations.clone();
             tokio::spawn(async move {
                 while let Some(event) = p_rx_clone.lock().await.as_mut().unwrap().recv().await {
                     println!("Event received from processed sender!");
-                    Self::to_database(event);
+                    if let Err(e) = Self::to_database(event, &db_ops_clone).await {
+                        eprintln!("Failed to store event to database: {:?}", e);
+                    }
                 }
             });
         }
@@ -137,7 +154,59 @@ impl FileWatcher {
         Ok(())
     }
 
-    async fn to_database(event: FileEvent) -> Result<(), DbError> {
+    async fn to_database(
+        event: FileEvent,
+        db_operations: &Option<Arc<FileOperations>>,
+    ) -> Result<(), DbError> {
+        if let Some(db_ops) = db_operations {
+            match event.kind {
+                EventKind::Create(_) | EventKind::Modify(_) => {
+                    // File was created or modified, insert/update in database
+                    match db_ops.upsert_file_from_event(&event).await {
+                        Ok(file_model) => {
+                            println!(
+                                "Successfully stored file: {} (ID: {})",
+                                file_model.path, file_model.id
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to upsert file: {:?}", e);
+                            return Err(e);
+                        }
+                    }
+                }
+                EventKind::Remove(_) => {
+                    // File was deleted, remove from database
+                    for path in &event.paths {
+                        match db_ops.delete_file_by_path(path).await {
+                            Ok(deleted) => {
+                                if deleted {
+                                    println!(
+                                        "Successfully removed file from database: {}",
+                                        path.display()
+                                    );
+                                } else {
+                                    println!(
+                                        "File not found in database (already removed?): {}",
+                                        path.display()
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to delete file from database: {:?}", e);
+                                return Err(e);
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    // Other event types (e.g., access) - we might not need to handle these
+                    println!("Ignoring event type: {:?}", event.kind);
+                }
+            }
+        } else {
+            println!("No database operations configured, skipping database storage");
+        }
         Ok(())
     }
 

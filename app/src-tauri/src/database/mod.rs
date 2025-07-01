@@ -1,3 +1,5 @@
 pub mod manager;
+pub mod operations;
 
-use manager::*;
+pub use manager::*;
+pub use operations::*;

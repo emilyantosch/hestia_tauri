@@ -2,7 +2,7 @@ use std::fmt;
 
 use thiserror::Error;
 
-use crate::errors::{FileError, HashError};
+use crate::errors::{DbError, FileError, HashError};
 
 impl PartialEq for AppErrorKind {
     fn eq(&self, other: &Self) -> bool {
@@ -49,6 +49,16 @@ impl From<FileError> for AppError {
             kind: AppErrorKind::FileError,
             message: file_error.message.clone(),
             source: Some(Box::new(file_error)),
+        }
+    }
+}
+
+impl From<DbError> for AppError {
+    fn from(db_error: DbError) -> AppError {
+        AppError::Categorized {
+            kind: AppErrorKind::DbError,
+            message: db_error.message.clone(),
+            source: Some(Box::new(db_error)),
         }
     }
 }
