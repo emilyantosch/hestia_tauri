@@ -1,3 +1,4 @@
+use async_std::fs::File;
 use sea_orm_migration::{prelude::*, schema::*};
 
 #[derive(DeriveMigrationName)]
@@ -123,6 +124,22 @@ impl MigrationTrait for Migration {
             )
             .await
             .expect("Failed to create index for table files");
+
+        // FileSystemIdentifier Migration
+        manager
+            .create_table(
+                Table::create()
+                    .table(FileSystemIdentifier::Table)
+                    .if_not_exists()
+                    .col(pk_auto(FileSystemIdentifier::_ID))
+                    .col(integer(FileSystemIdentifier::Inode))
+                    .col(integer(FileSystemIdentifier::DeviceNum))
+                    .col(integer(FileSystemIdentifier::IndexNum))
+                    .col(integer(FileSystemIdentifier::VolumeSerialNum))
+                    .to_owned(),
+            )
+            .await
+            .expect("Could not create FileSystemIdentifier");
 
         // Folder Migration
         manager
