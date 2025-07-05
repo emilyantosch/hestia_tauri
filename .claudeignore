@@ -1,0 +1,29 @@
+# Root level ignores
+/node_modules/
+/test_vault/
+/LICENSE
+/README.md
+
+# App level ignores
+/app/node_modules/
+/app/target/
+/app/dist/
+/app/migration/
+/app/public/
+/app/bun.bunx
+/app/bun.lock
+/app/shell.nix
+/app/components.json
+/app/tsconfig.json
+/app/tsconfig.node.json
+/app/vite.config.ts
+/app/index.html
+/app/main.sqlite3
+/app/README.md
+
+# Keep accessible:
+# - CLAUDE.md (project instructions)
+# - app/entity/ (database entities)
+# - app/src-tauri/ (Tauri backend)
+# - app/src/ (React frontend source)
+# - app/Cargo.toml, app/package.json (essential manifests)
