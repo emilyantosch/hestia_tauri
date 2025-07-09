@@ -99,7 +99,7 @@ impl MigrationTrait for Migration {
                             .to_owned(),
                     )
                     .col(pk_auto(Files::_ID))
-                    .col(pk_auto(Files::FileSystemId))
+                    .col(integer(Files::FileSystemId))
                     .col(string(Files::Name))
                     .col(string(Files::Path))
                     .col(string(Files::ContentHash))

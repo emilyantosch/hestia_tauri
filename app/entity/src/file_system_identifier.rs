@@ -3,24 +3,25 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "tags")]
+#[sea_orm(table_name = "file_system_identifier")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
-    pub name: String,
-    pub created_at: DateTime,
-    pub updated_at: DateTime,
+    pub inode: i32,
+    pub device_num: i32,
+    pub index_num: i32,
+    pub volume_serial_num: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::file_has_tags::Entity")]
-    FileHasTags,
+    #[sea_orm(has_many = "super::files::Entity")]
+    Files,
 }
 
-impl Related<super::file_has_tags::Entity> for Entity {
+impl Related<super::files::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::FileHasTags.def()
+        Relation::Files.def()
     }
 }
 

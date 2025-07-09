@@ -8,7 +8,7 @@ use sea_orm::{
 };
 use tokio::sync::RwLock;
 
-use entity::{files, file_types, prelude::*};
+use entity::{files, file_types, file_system_identifier, prelude::*};
 
 use crate::errors::{DbError, DbErrorKind};
 use crate::file_system::{FileEvent, FileHash, FileId};
@@ -18,9 +18,10 @@ use crate::file_system::{FileEvent, FileHash, FileId};
 pub struct FileInfo {
     pub path: PathBuf,
     pub name: String,
-    pub hash: String,
-    pub file_size: i64,
+    pub content_hash: String,
+    pub identity_hash: String,
     pub file_type_name: String,
+    pub file_system_id: Option<i32>,
 }
 
 /// Database file metadata for comparison
@@ -28,8 +29,9 @@ pub struct FileInfo {
 pub struct FileMetadata {
     pub id: i32,
     pub path: PathBuf,
-    pub hash: String,
-    pub file_size: i32,
+    pub content_hash: String,
+    pub identity_hash: String,
+    pub file_system_id: i32,
     pub updated_at: chrono::NaiveDateTime,
 }
 
@@ -72,18 +74,13 @@ impl FileOperations {
         // Get or create file type
         let file_type_id = self.get_or_create_file_type(&file_path, &transaction).await?;
 
-        // Get file size
-        let file_size = if file_path.exists() && file_path.is_file() {
-            match tokio::fs::metadata(&file_path).await {
-                Ok(metadata) => metadata.len() as i32,
-                Err(_) => 0,
-            }
-        } else {
-            0
-        };
 
-        // Convert hash to string
-        let hash_str = format!("{:?}", event.hash);
+        // Get proper content and identity hashes from the FileHash struct
+        let content_hash_str = format!("{:?}", event.hash.content_hash);
+        let identity_hash_str = format!("{:?}", event.hash.identity_hash);
+
+        // Get file system identifier
+        let file_system_id = self.get_or_create_file_system_identifier(&file_path).await?;
 
         // Check if file already exists by path
         let existing_file = Files::find()
@@ -100,9 +97,10 @@ impl FileOperations {
             // Update existing file
             let mut active_model = existing.into_active_model();
             active_model.name = Set(file_name);
-            active_model.hash = Set(hash_str);
-            active_model.file_size = Set(file_size);
+            active_model.content_hash = Set(content_hash_str);
+            active_model.identity_hash = Set(identity_hash_str);
             active_model.file_type_id = Set(file_type_id);
+            active_model.file_system_id = Set(file_system_id);
             active_model.updated_at = Set(chrono::Utc::now().naive_utc());
 
             active_model
@@ -119,9 +117,10 @@ impl FileOperations {
                 id: sea_orm::ActiveValue::NotSet,
                 name: Set(file_name),
                 path: Set(path_str),
-                hash: Set(hash_str),
-                file_size: Set(file_size),
+                content_hash: Set(content_hash_str),
+                identity_hash: Set(identity_hash_str),
                 file_type_id: Set(file_type_id),
+                file_system_id: Set(file_system_id),
                 created_at: Set(chrono::Utc::now().naive_utc()),
                 updated_at: Set(chrono::Utc::now().naive_utc()),
             };
@@ -314,8 +313,9 @@ impl FileOperations {
             let metadata = FileMetadata {
                 id: file.id,
                 path: PathBuf::from(&file.path),
-                hash: file.hash,
-                file_size: file.file_size,
+                content_hash: file.content_hash,
+                identity_hash: file.identity_hash,
+                file_system_id: file.file_system_id,
                 updated_at: file.updated_at,
             };
             state.insert(PathBuf::from(file.path), metadata);
@@ -325,12 +325,12 @@ impl FileOperations {
     }
 
     /// Get file hashes as a map for quick comparison
-    pub async fn get_file_hashes_map(&self, dir_path: &Path) -> Result<HashMap<PathBuf, String>, DbError> {
+    pub async fn get_file_hashes_map(&self, dir_path: &Path) -> Result<HashMap<PathBuf, (String, String)>, DbError> {
         let files = self.get_files_in_directory(dir_path).await?;
         
         let mut hashes = HashMap::new();
         for file in files {
-            hashes.insert(PathBuf::from(file.path), file.hash);
+            hashes.insert(PathBuf::from(file.path), (file.content_hash, file.identity_hash));
         }
         
         Ok(hashes)
@@ -356,6 +356,13 @@ impl FileOperations {
             // Get or create file type (with caching)
             let file_type_id = self.get_or_create_file_type_cached(&file_info.file_type_name, &transaction).await?;
 
+            // Get file system identifier
+            let file_system_id = if let Some(fsi_id) = file_info.file_system_id {
+                fsi_id
+            } else {
+                self.get_or_create_file_system_identifier(&file_info.path).await?
+            };
+
             // Check if file exists
             let existing_file = Files::find()
                 .filter(files::Column::Path.eq(&file_info.path.to_string_lossy().to_string()))
@@ -371,9 +378,10 @@ impl FileOperations {
                 // Update existing file
                 let mut active_model = existing.into_active_model();
                 active_model.name = Set(file_info.name);
-                active_model.hash = Set(file_info.hash);
-                active_model.file_size = Set(file_info.file_size as i32);
+                active_model.content_hash = Set(file_info.content_hash);
+                active_model.identity_hash = Set(file_info.identity_hash);
                 active_model.file_type_id = Set(file_type_id);
+                active_model.file_system_id = Set(file_system_id);
                 active_model.updated_at = Set(chrono::Utc::now().naive_utc());
 
                 active_model.update(&transaction).await.map_err(|e| {
@@ -389,9 +397,10 @@ impl FileOperations {
                     id: sea_orm::ActiveValue::NotSet,
                     name: Set(file_info.name),
                     path: Set(file_info.path.to_string_lossy().to_string()),
-                    hash: Set(file_info.hash),
-                    file_size: Set(file_info.file_size as i32),
+                    content_hash: Set(file_info.content_hash),
+                    identity_hash: Set(file_info.identity_hash),
                     file_type_id: Set(file_type_id),
+                    file_system_id: Set(file_system_id),
                     created_at: Set(chrono::Utc::now().naive_utc()),
                     updated_at: Set(chrono::Utc::now().naive_utc()),
                 };
@@ -515,6 +524,59 @@ impl FileOperations {
         })?;
 
         Ok(created_type.id)
+    }
+
+    /// Get or create file system identifier based on file metadata
+    pub async fn get_or_create_file_system_identifier(&self, file_path: &Path) -> Result<i32, DbError> {
+        use std::os::unix::fs::MetadataExt;
+        
+        let metadata = std::fs::metadata(file_path).map_err(|e| {
+            DbError::with_source(
+                DbErrorKind::QueryError,
+                format!("Failed to get file metadata for {}", file_path.display()),
+                e,
+            )
+        })?;
+
+        let inode = metadata.ino() as i32;
+        let device_num = metadata.dev() as i32;
+        let index_num = metadata.ino() as i32;
+        let volume_serial_num = 0; // Unix systems don't have volume serial numbers
+
+        // Check if file system identifier already exists
+        let existing_fsi = file_system_identifier::Entity::find()
+            .filter(file_system_identifier::Column::Inode.eq(inode))
+            .filter(file_system_identifier::Column::DeviceNum.eq(device_num))
+            .one(&*self.connection)
+            .await
+            .map_err(|e| DbError::with_source(
+                DbErrorKind::QueryError,
+                "Failed to query file system identifier".to_string(),
+                e,
+            ))?;
+
+        if let Some(fsi) = existing_fsi {
+            return Ok(fsi.id);
+        }
+
+        // Create new file system identifier
+        let new_fsi = file_system_identifier::ActiveModel {
+            id: sea_orm::ActiveValue::NotSet,
+            inode: Set(inode),
+            device_num: Set(device_num),
+            index_num: Set(index_num),
+            volume_serial_num: Set(volume_serial_num),
+        };
+
+        let created_fsi = new_fsi.insert(&*self.connection).await.map_err(|e| {
+            DbError::with_source(
+                DbErrorKind::InsertError,
+                "Failed to insert file system identifier".to_string(),
+                e,
+            )
+        })?;
+
+        Ok(created_fsi.id)
     }
 
     /// Preload common file types into cache

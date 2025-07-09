@@ -11,7 +11,6 @@ use std::path::PathBuf;
 use crate::errors::*;
 use crate::file_system::FileWatcher;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     hestia_tauri_lib::run()
 }

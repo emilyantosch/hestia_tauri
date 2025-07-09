@@ -254,9 +254,10 @@ impl DirectoryScanner {
             .unwrap_or("unknown")
             .to_string();
 
-        // Calculate file hash
-        let hash = FileHash::hash(path).await?;
-        let hash_str = format!("{:?}", hash);
+        // Calculate file hash using sophisticated algorithm
+        let file_hash = FileHash::hash(path).await?;
+        let content_hash_str = format!("{:?}", file_hash.content_hash);
+        let identity_hash_str = format!("{:?}", file_hash.identity_hash);
 
         // Detect file type
         let file_type_name = self.detect_file_type(path);
@@ -264,9 +265,10 @@ impl DirectoryScanner {
         Ok(FileInfo {
             path: path.to_path_buf(),
             name,
-            hash: hash_str,
-            file_size: metadata.len() as i64,
+            content_hash: content_hash_str,
+            identity_hash: identity_hash_str,
             file_type_name,
+            file_system_id: None, // Will be set during database operations
         })
     }
 
@@ -286,8 +288,8 @@ impl DirectoryScanner {
             match db_state.get(&fs_file.path) {
                 Some(db_metadata) => {
                     // File exists in database, check if it needs updating
-                    if db_metadata.hash != fs_file.hash
-                        || db_metadata.file_size != fs_file.file_size as i32
+                    if db_metadata.content_hash != fs_file.content_hash
+                        || db_metadata.identity_hash != fs_file.identity_hash
                     {
                         operations.push(SyncOperation::Update(fs_file));
                     }

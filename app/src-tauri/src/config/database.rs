@@ -27,7 +27,7 @@ pub enum DatabaseType {
 
 #[derive(Clone, Debug)]
 pub struct SqliteConfig {
-    pub file_path: PathBuf,
+    pub con_string: String,
     pub create_if_missing: bool,
     pub connection_timeout_ms: u32,
     pub journal_mode: SqliteJournalMode,
@@ -486,11 +486,19 @@ impl PostgresConfig {
 impl Default for SqliteConfig {
     fn default() -> Self {
         // Use a default path relative to the app directory
-        let app_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        let db_path = app_dir.join("main.sqlite3");
-        
+        let preamble = String::from("sqlite://");
+        // let app_dir = std::env::current_dir()
+        //     .unwrap_or_else(|_| PathBuf::from("."))
+        //     .to_string_lossy()
+        //     .to_string();
+        let app_dir = String::from("/home/emmi/projects/projects/hestia_tauri/app/");
+        println!("{:?}", app_dir);
+        let suffix = String::from("main.sqlite?mode=rw");
+
+        let con_string = format!("{}{}{}", preamble, app_dir, suffix);
+
         Self {
-            file_path: db_path,
+            con_string,
             create_if_missing: true,
             connection_timeout_ms: 5000,
             journal_mode: SqliteJournalMode::Wal,
@@ -538,7 +546,7 @@ impl DatabaseSettings {
         match self.db_type {
             DatabaseType::Sqlite => {
                 if let Some(config) = &self.sqlite_config {
-                    Ok(format!("sqlite://{}", config.file_path.display()))
+                    Ok(config.con_string.clone())
                 } else {
                     Err("SQLite configuration is missing".to_string())
                 }
