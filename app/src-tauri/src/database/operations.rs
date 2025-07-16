@@ -12,7 +12,7 @@ use entity::{file_system_identifier, file_types, files, folders, prelude::*};
 
 use crate::database::DatabaseManager;
 use crate::errors::{DbError, DbErrorKind};
-use crate::file_system::{FileEvent, FileHash, FileId};
+use crate::file_system::{FileEvent, FolderEvent};
 
 /// File information for bulk operations
 #[derive(Debug, Clone)]
@@ -50,13 +50,52 @@ impl FileOperations {
         }
     }
 
-    pub async fn get_or_create_parent_folder_id<C: ConnectionTrait>(&self, folder_path: &PathBuf, transaction: &C) -> Result<i32, DbError> {
-        let folder_with_pfi = Folders::find().one(transaction).await.map_err(|e| DbError::with_source(DbErrorKind::QueryError, "Failed to find parent folder id due to db error".to_string(), e))?;
+    pub async fn get_or_create_parent_folder_id<C: ConnectionTrait>(
+        &self,
+        folder_path: &PathBuf,
+        transaction: &C,
+    ) -> Result<i32, DbError> {
+        let folder_with_pfi = Folders::find()
+            .filter(folders::Column::Path.eq(folder_path.to_string_lossy().to_string()))
+            .one(transaction)
+            .await
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::QueryError,
+                    "Failed to find parent folder id due to db error".to_string(),
+                    e,
+                )
+            })?;
 
         let parent_folder_id = if let Some(existing) = folder_with_pfi {
             existing.parent_folder_id
         } else {
-            folder_path
+            let parent_folder = match folder_path.parent() {
+                Some(path) => path,
+                None => {
+                    return Err(DbError { kind: DbErrorKind::QueryError, message: "This is already the root folder of the system and therefore has no parent folder".to_string(), source: None})
+                }
+            };
+
+            match Folders::find()
+                .filter(folders::Column::Path.eq(parent_folder.to_string_lossy().to_string()))
+                .one(transaction)
+                .await
+                .map_err(|e| {
+                    DbError::with_source(
+                        DbErrorKind::QueryError,
+                        "Failed to find parent folder".to_string(),
+                        e,
+                    )
+                })? {
+                Some(model) => model.id,
+                None => {
+                    return Err(DbError::new(
+                        DbErrorKind::QueryError,
+                        "Failed to find model from database".to_string(),
+                    ))
+                }
+            }
         };
 
         Ok(parent_folder_id)
@@ -64,7 +103,7 @@ impl FileOperations {
 
     pub async fn upsert_folder_from_event(
         &self,
-        event: &FileEvent,
+        event: &FolderEvent,
     ) -> Result<folders::Model, DbError> {
         let connection = self.database_manager.get_connection();
         let transaction = connection.begin().await.map_err(|e| {
@@ -133,7 +172,8 @@ impl FileOperations {
             active_model.path = Set(path_str);
             active_model.content_hash = Set(content_hash_str);
             active_model.identity_hash = Set(identity_hash_str);
-            active_model.file_type_id = Set(file_type_id);
+            active_model.structure_hash = Set(structure_hash_str);
+            active_model.parent_folder_id = Set(parent_folder_id);
             active_model.file_system_id = Set(file_system_id);
             active_model.updated_at = Set(chrono::Local::now().naive_local());
 
@@ -150,7 +190,7 @@ impl FileOperations {
                 id: sea_orm::ActiveValue::NotSet,
                 name: Set(folder_name),
                 path: Set(path_str),
-                parent_folder_id: Set()
+                parent_folder_id: Set(parent_folder_id),
                 content_hash: Set(content_hash_str),
                 identity_hash: Set(identity_hash_str),
                 structure_hash: Set(structure_hash_str),
@@ -300,6 +340,26 @@ impl FileOperations {
                 DbError::with_source(
                     DbErrorKind::DeleteError,
                     "Failed to delete file record".to_string(),
+                    e,
+                )
+            })?;
+
+        Ok(result.rows_affected > 0)
+    }
+
+    /// Delete a file record from the database
+    pub async fn delete_folder_by_path(&self, folder_path: &Path) -> Result<bool, DbError> {
+        let path_str = folder_path.to_string_lossy().to_string();
+        let connection = self.database_manager.get_connection();
+
+        let result = Folders::delete_many()
+            .filter(folders::Column::Path.eq(&path_str))
+            .exec(&*connection)
+            .await
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::DeleteError,
+                    "Failed to delete folder record".to_string(),
                     e,
                 )
             })?;

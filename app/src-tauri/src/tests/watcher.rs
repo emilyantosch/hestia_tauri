@@ -17,7 +17,7 @@ async fn create_test_watcher() -> FileWatcher {
 }
 
 #[tokio::test]
-async fn on_create_emit_correct_event() {
+async fn on_file_create_emit_correct_event() {
     let tmp_dir = tempdir().unwrap();
     let file_path = tmp_dir.path().join("test_file.txt");
 
@@ -43,12 +43,21 @@ async fn on_create_emit_correct_event() {
     if let Some(ref mut rx) = *receiver_lock {
         match tokio::time::timeout(Duration::from_secs(1), rx.recv()).await {
             Ok(Some(event)) => {
-                assert!(matches!(event.kind, EventKind::Create(CreateKind::File)));
-                assert_eq!(event.paths, vec![file_path.clone()]);
+                assert!(matches!(
+                    event.file_event.as_ref().unwrap().kind,
+                    EventKind::Create(CreateKind::File)
+                ));
+                assert_eq!(
+                    event.file_event.as_ref().unwrap().paths,
+                    vec![file_path.clone()]
+                );
                 // Further assertions on file_id if necessary,
                 // e.g. check if it's not default or matches expected hash
                 let expected_file_id = FileId::extract(&file_path).await.unwrap();
-                assert_eq!(event.hash.file_id, expected_file_id);
+                assert_eq!(
+                    event.file_event.as_ref().unwrap().hash.file_id,
+                    expected_file_id
+                );
             }
             Ok(None) => panic!("Processed event channel closed prematurely"),
             Err(_) => panic!("Timeout waiting for processed event for create"),
@@ -59,7 +68,7 @@ async fn on_create_emit_correct_event() {
 }
 
 #[tokio::test]
-async fn on_modify_emit_correct_event() {
+async fn on_file_modify_emit_correct_event() {
     let tmp_dir = tempdir().unwrap();
     let file_path = tmp_dir.path().join("mod_test_file.txt");
 
@@ -122,17 +131,26 @@ async fn on_modify_emit_correct_event() {
                 println!("Received event after modify: {:?}", event);
                 // Assert event kind is Modify (any sub-kind of Modify is fine)
                 assert!(
-                    matches!(event.kind, EventKind::Modify(_)),
+                    matches!(
+                        event.file_event.as_ref().unwrap().kind,
+                        EventKind::Modify(_)
+                    ),
                     "Event kind was not Modify: {:?}",
-                    event.kind
+                    event.file_event.as_ref().unwrap().kind
                 );
                 // Assert path is correct
-                assert_eq!(event.paths, vec![file_path.clone()]);
+                assert_eq!(
+                    event.file_event.as_ref().unwrap().paths,
+                    vec![file_path.clone()]
+                );
                 // Assert FileId is correct
                 let expected_file_id = FileId::extract(&file_path)
                     .await
                     .expect("Failed to extract FileId for modified file");
-                assert_eq!(event.hash.file_id, expected_file_id);
+                assert_eq!(
+                    event.file_event.as_ref().unwrap().hash.file_id,
+                    expected_file_id
+                );
             }
             Ok(None) => {
                 panic!("Processed event channel closed prematurely before modify event")
@@ -145,7 +163,7 @@ async fn on_modify_emit_correct_event() {
 }
 
 #[tokio::test]
-async fn on_delete_emit_correct_event() {
+async fn on_file_delete_emit_correct_event() {
     let tmp_dir = tempdir().unwrap();
     let file_path = tmp_dir.path().join("del_test_file.txt");
 
@@ -208,16 +226,23 @@ async fn on_delete_emit_correct_event() {
                 println!("Received event after delete: {:?}", event);
                 // Assert event kind is RemoveKind::File
                 assert!(
-                    matches!(event.kind, EventKind::Remove(RemoveKind::File)),
+                    matches!(
+                        event.file_event.as_ref().unwrap().kind,
+                        EventKind::Remove(RemoveKind::File)
+                    ),
                     "Event kind was not Remove(File): {:?}",
-                    event.kind
+                    event.file_event.as_ref().unwrap().kind
                 );
                 // Assert path is correct
-                assert_eq!(event.paths, vec![file_path.clone()]);
+                assert_eq!(
+                    event.file_event.as_ref().unwrap().paths,
+                    vec![file_path.clone()]
+                );
                 // Assert FileId is correct (should be from_path as file is deleted)
                 let expected_file_id = FileId::extract(&file_path).await.unwrap();
                 assert_eq!(
-                    event.hash.file_id, expected_file_id,
+                    event.file_event.as_ref().unwrap().hash.file_id,
+                    expected_file_id,
                     "FileId did not match expected from_path ID"
                 );
             }
@@ -299,25 +324,26 @@ async fn on_rename_emit_correct_event() {
                 // Assert event kind is ModifyKind::Name(RenameMode::Both)
                 assert!(
                     matches!(
-                        event.kind,
+                        event.file_event.as_ref().unwrap().kind,
                         EventKind::Modify(ModifyKind::Name(RenameMode::Both))
                     ),
                     "Event kind was not Modify(Name(Both)): {:?}",
-                    event.kind
+                    event.file_event.as_ref().unwrap().kind
                 );
                 // Assert paths are correct (old and new)
                 // The order of paths in the event can sometimes vary by platform or notify backend.
                 // We should check that both paths are present and the order.
                 // The current implementation of `notify-debouncer-full` seems to provide [from, to]
                 assert_eq!(
-                    event.paths,
+                    event.file_event.as_ref().unwrap().paths,
                     vec![old_file_path.clone(), new_file_path.clone()],
                     "Event paths did not match expected [old_path, new_path]"
                 );
                 // Assert FileId is based on the new path
                 let expected_file_id = FileId::extract(&new_file_path).await.unwrap();
                 assert_eq!(
-                    event.hash.file_id, expected_file_id,
+                    event.file_event.as_ref().unwrap().hash.file_id,
+                    expected_file_id,
                     "FileId did not match expected from_path for new_file_path"
                 );
             }
@@ -361,16 +387,23 @@ async fn on_folder_create_emit_correct_event() {
                 println!("Received event after folder create: {:?}", event);
                 // Assert event kind is CreateKind::Folder
                 assert!(
-                    matches!(event.kind, EventKind::Create(CreateKind::Folder)),
+                    matches!(
+                        event.file_event.as_ref().unwrap().kind,
+                        EventKind::Create(CreateKind::Folder)
+                    ),
                     "Event kind was not Create(Folder): {:?}",
-                    event.kind
+                    event.file_event.as_ref().unwrap().kind
                 );
                 // Assert path is correct
-                assert_eq!(event.paths, vec![folder_path.clone()]);
+                assert_eq!(
+                    event.file_event.as_ref().unwrap().paths,
+                    vec![folder_path.clone()]
+                );
                 // Assert oileId is based on the folder path
                 let expected_file_id = FileId::extract(&folder_path).await.unwrap();
                 assert_eq!(
-                    event.hash.file_id, expected_file_id,
+                    event.file_event.as_ref().unwrap().hash.file_id,
+                    expected_file_id,
                     "FileId did not match expected from_path for new_folder_path"
                 );
             }
@@ -444,16 +477,23 @@ async fn on_folder_delete_emit_correct_event() {
                 println!("Received event after folder delete: {:?}", event);
                 // Assert event kind is RemoveKind::Folder
                 assert!(
-                    matches!(event.kind, EventKind::Remove(RemoveKind::Folder)),
+                    matches!(
+                        event.file_event.as_ref().unwrap().kind,
+                        EventKind::Remove(RemoveKind::Folder)
+                    ),
                     "Event kind was not Remove(Folder): {:?}",
-                    event.kind
+                    event.file_event.as_ref().unwrap().kind
                 );
                 // Assert path is correct
-                assert_eq!(event.paths, vec![folder_path.clone()]);
+                assert_eq!(
+                    event.file_event.as_ref().unwrap().paths,
+                    vec![folder_path.clone()]
+                );
                 // Assert FileId is based on the folder path
                 let expected_file_id = FileId::extract(&folder_path).await.unwrap();
                 assert_eq!(
-                    event.hash.file_id, expected_file_id,
+                    event.file_event.as_ref().unwrap().hash.file_id,
+                    expected_file_id,
                     "FileId did not match expected from_path for deleted_folder_path"
                 );
             }
@@ -533,22 +573,23 @@ async fn on_folder_rename_emit_correct_event() {
                 // Assert event kind is ModifyKind::Name(RenameMode::Both)
                 assert!(
                     matches!(
-                        event.kind,
+                        event.file_event.as_ref().unwrap().kind,
                         EventKind::Modify(ModifyKind::Name(RenameMode::Both))
                     ),
                     "Event kind was not Modify(Name(Both)) for folder rename: {:?}",
-                    event.kind
+                    event.file_event.as_ref().unwrap().kind
                 );
                 // Assert paths are correct (old and new)
                 assert_eq!(
-                    event.paths,
+                    event.file_event.as_ref().unwrap().paths,
                     vec![old_folder_path.clone(), new_folder_path.clone()],
                     "Event paths did not match expected [old_folder_path, new_folder_path]"
                 );
                 // Assert FileId is based on the new folder path
                 let expected_file_id = FileId::extract(&new_folder_path).await.unwrap();
                 assert_eq!(
-                    event.hash.file_id, expected_file_id,
+                    event.file_event.as_ref().unwrap().hash.file_id,
+                    expected_file_id,
                     "FileId did not match expected from_path for new_folder_path"
                 );
             }

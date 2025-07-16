@@ -62,3 +62,27 @@ impl From<DbError> for AppError {
         }
     }
 }
+
+impl AppError {
+    /// Create a new AppError with a source
+    pub fn with_source(
+        kind: AppErrorKind,
+        message: String,
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    ) -> Self {
+        AppError::Categorized {
+            kind,
+            message,
+            source,
+        }
+    }
+
+    /// Create a new AppError without a source
+    pub fn new(kind: AppErrorKind, message: String) -> Self {
+        AppError::Categorized {
+            kind,
+            message,
+            source: None,
+        }
+    }
+}
