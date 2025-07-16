@@ -3,13 +3,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, EntityTrait, IntoActiveModel, QueryFilter,
-    Set, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction,
+    EntityTrait, IntoActiveModel, QueryFilter, Set, TransactionTrait,
 };
 use tokio::sync::RwLock;
 
-use entity::{files, file_types, file_system_identifier, prelude::*};
+use entity::{file_system_identifier, file_types, files, folders, prelude::*};
 
+use crate::database::DatabaseManager;
 use crate::errors::{DbError, DbErrorKind};
 use crate::file_system::{FileEvent, FileHash, FileId};
 
@@ -37,80 +38,222 @@ pub struct FileMetadata {
 
 /// Database operations for file management with caching and bulk operations
 pub struct FileOperations {
-    connection: Arc<DatabaseConnection>,
+    database_manager: Arc<DatabaseManager>,
     file_type_cache: Arc<RwLock<HashMap<String, i32>>>,
 }
 
 impl FileOperations {
-    pub fn new(connection: Arc<DatabaseConnection>) -> Self {
-        Self { 
-            connection,
+    pub fn new(database_manager: Arc<DatabaseManager>) -> Self {
+        Self {
+            database_manager,
             file_type_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    /// Insert or update a file in the database based on FileEvent
-    pub async fn upsert_file_from_event(&self, event: &FileEvent) -> Result<files::Model, DbError> {
-        let transaction = self
-            .connection
-            .begin()
-            .await
-            .map_err(|e| DbError::with_source(
+    pub async fn get_or_create_parent_folder_id<C: ConnectionTrait>(&self, folder_path: &PathBuf, transaction: &C) -> Result<i32, DbError> {
+        let folder_with_pfi = Folders::find().one(transaction).await.map_err(|e| DbError::with_source(DbErrorKind::QueryError, "Failed to find parent folder id due to db error".to_string(), e))?;
+
+        let parent_folder_id = if let Some(existing) = folder_with_pfi {
+            existing.parent_folder_id
+        } else {
+            folder_path
+        };
+
+        Ok(parent_folder_id)
+    }
+
+    pub async fn upsert_folder_from_event(
+        &self,
+        event: &FileEvent,
+    ) -> Result<folders::Model, DbError> {
+        let connection = self.database_manager.get_connection();
+        let transaction = connection.begin().await.map_err(|e| {
+            DbError::with_source(
                 DbErrorKind::TransactionError,
                 "Failed to start database transaction".to_string(),
                 e,
-            ))?;
+            )
+        })?;
+
+        let folder_path = match event.paths.last() {
+            Some(path) => path,
+            None => {
+                return Err(DbError::new(
+                    DbErrorKind::ConfigurationError,
+                    "The last of the paths could not be extracted. Does the path exist?"
+                        .to_string(),
+                ))
+            }
+        };
+
+        let folder_name = folder_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        let path_str = folder_path.to_string_lossy().to_string();
+
+        // Get or create file type
+        let file_type_id = self
+            .get_or_create_file_type(&folder_path, &transaction)
+            .await?;
+
+        // Get proper content and identity hashes from the FileHash struct
+        let content_hash_str = format!("{:?}", event.hash.content_hash);
+        let identity_hash_str = format!("{:?}", event.hash.identity_hash);
+        let structure_hash_str = format!("{:?}", event.hash.structure_hash);
+
+        // Get file system identifier
+        let file_system_id = self
+            .get_or_create_file_system_identifier(&folder_path, &transaction)
+            .await?;
+
+        let parent_folder_id = self
+            .get_or_create_parent_folder_id(&folder_path, &transaction)
+            .await?;
+
+        //  What we actually wanna do is check if the file exists by fsi and/or hash.
+        let folder_with_fsi = Folders::find()
+            .filter(folders::Column::FileSystemId.eq(file_system_id))
+            .one(&transaction)
+            .await
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::QueryError,
+                    "Failed to find any files".to_string(),
+                    e,
+                )
+            })?;
+
+        let folder_model = if let Some(existing) = folder_with_fsi {
+            // Update existing file
+            let mut active_model = existing.into_active_model();
+            active_model.name = Set(folder_name);
+            active_model.path = Set(path_str);
+            active_model.content_hash = Set(content_hash_str);
+            active_model.identity_hash = Set(identity_hash_str);
+            active_model.file_type_id = Set(file_type_id);
+            active_model.file_system_id = Set(file_system_id);
+            active_model.updated_at = Set(chrono::Local::now().naive_local());
+
+            active_model.update(&transaction).await.map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::UpdateError,
+                    "Failed to update file record".to_string(),
+                    e,
+                )
+            })?
+        } else {
+            // Insert new file
+            let new_file = folders::ActiveModel {
+                id: sea_orm::ActiveValue::NotSet,
+                name: Set(folder_name),
+                path: Set(path_str),
+                parent_folder_id: Set()
+                content_hash: Set(content_hash_str),
+                identity_hash: Set(identity_hash_str),
+                structure_hash: Set(structure_hash_str),
+                file_system_id: Set(file_system_id),
+                created_at: Set(chrono::Utc::now().naive_utc()),
+                updated_at: Set(chrono::Utc::now().naive_utc()),
+            };
+
+            new_file.insert(&transaction).await.map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::InsertError,
+                    "Failed to insert file record".to_string(),
+                    e,
+                )
+            })?
+        };
+
+        transaction.commit().await.map_err(|e| {
+            DbError::with_source(
+                DbErrorKind::TransactionError,
+                "Failed to commit transaction".to_string(),
+                e,
+            )
+        })?;
+
+        Ok(folder_model)
+    }
+    /// Insert or update a file in the database based on FileEvent
+    pub async fn upsert_file_from_event(&self, event: &FileEvent) -> Result<files::Model, DbError> {
+        let connection = self.database_manager.get_connection();
+        let transaction = connection.begin().await.map_err(|e| {
+            DbError::with_source(
+                DbErrorKind::TransactionError,
+                "Failed to start database transaction".to_string(),
+                e,
+            )
+        })?;
 
         // Extract file information from the event
-        let file_path = &event.paths[0];
+        let file_path = match event.paths.last() {
+            Some(path) => path,
+            None => {
+                return Err(DbError::new(
+                    DbErrorKind::ConfigurationError,
+                    String::from(
+                        "The last of the paths could not be extracted, no paths were provided.",
+                    ),
+                ));
+            }
+        };
         let file_name = file_path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("unknown")
             .to_string();
-        
+
         let path_str = file_path.to_string_lossy().to_string();
 
         // Get or create file type
-        let file_type_id = self.get_or_create_file_type(&file_path, &transaction).await?;
-
+        let file_type_id = self
+            .get_or_create_file_type(&file_path, &transaction)
+            .await?;
 
         // Get proper content and identity hashes from the FileHash struct
         let content_hash_str = format!("{:?}", event.hash.content_hash);
         let identity_hash_str = format!("{:?}", event.hash.identity_hash);
 
         // Get file system identifier
-        let file_system_id = self.get_or_create_file_system_identifier(&file_path).await?;
+        let file_system_id = self
+            .get_or_create_file_system_identifier(&file_path, &transaction)
+            .await?;
 
-        // Check if file already exists by path
-        let existing_file = Files::find()
-            .filter(files::Column::Path.eq(&path_str))
+        //  What we actually wanna do is check if the file exists by fsi and/or hash.
+        let file_with_fsi = Files::find()
+            .filter(files::Column::FileSystemId.eq(file_system_id))
             .one(&transaction)
             .await
-            .map_err(|e| DbError::with_source(
-                DbErrorKind::QueryError,
-                "Failed to query existing file".to_string(),
-                e,
-            ))?;
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::QueryError,
+                    "Failed to find any files".to_string(),
+                    e,
+                )
+            })?;
 
-        let file_model = if let Some(existing) = existing_file {
+        let file_model = if let Some(existing) = file_with_fsi {
             // Update existing file
             let mut active_model = existing.into_active_model();
             active_model.name = Set(file_name);
+            active_model.path = Set(path_str);
             active_model.content_hash = Set(content_hash_str);
             active_model.identity_hash = Set(identity_hash_str);
             active_model.file_type_id = Set(file_type_id);
             active_model.file_system_id = Set(file_system_id);
-            active_model.updated_at = Set(chrono::Utc::now().naive_utc());
+            active_model.updated_at = Set(chrono::Local::now().naive_local());
 
-            active_model
-                .update(&transaction)
-                .await
-                .map_err(|e| DbError::with_source(
+            active_model.update(&transaction).await.map_err(|e| {
+                DbError::with_source(
                     DbErrorKind::UpdateError,
                     "Failed to update file record".to_string(),
                     e,
-                ))?
+                )
+            })?
         } else {
             // Insert new file
             let new_file = files::ActiveModel {
@@ -125,41 +268,41 @@ impl FileOperations {
                 updated_at: Set(chrono::Utc::now().naive_utc()),
             };
 
-            new_file
-                .insert(&transaction)
-                .await
-                .map_err(|e| DbError::with_source(
+            new_file.insert(&transaction).await.map_err(|e| {
+                DbError::with_source(
                     DbErrorKind::InsertError,
                     "Failed to insert file record".to_string(),
                     e,
-                ))?
+                )
+            })?
         };
 
-        transaction
-            .commit()
-            .await
-            .map_err(|e| DbError::with_source(
+        transaction.commit().await.map_err(|e| {
+            DbError::with_source(
                 DbErrorKind::TransactionError,
                 "Failed to commit transaction".to_string(),
                 e,
-            ))?;
-
+            )
+        })?;
         Ok(file_model)
     }
 
     /// Delete a file record from the database
     pub async fn delete_file_by_path(&self, file_path: &Path) -> Result<bool, DbError> {
         let path_str = file_path.to_string_lossy().to_string();
-        
+        let connection = self.database_manager.get_connection();
+
         let result = Files::delete_many()
             .filter(files::Column::Path.eq(&path_str))
-            .exec(&*self.connection)
+            .exec(&*connection)
             .await
-            .map_err(|e| DbError::with_source(
-                DbErrorKind::DeleteError,
-                "Failed to delete file record".to_string(),
-                e,
-            ))?;
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::DeleteError,
+                    "Failed to delete file record".to_string(),
+                    e,
+                )
+            })?;
 
         Ok(result.rows_affected > 0)
     }
@@ -180,11 +323,13 @@ impl FileOperations {
             .filter(file_types::Column::Name.eq(&file_type_name))
             .one(connection)
             .await
-            .map_err(|e| DbError::with_source(
-                DbErrorKind::QueryError,
-                "Failed to query file type".to_string(),
-                e,
-            ))?
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::QueryError,
+                    "Failed to query file type".to_string(),
+                    e,
+                )
+            })?
         {
             return Ok(existing_type.id);
         }
@@ -195,14 +340,13 @@ impl FileOperations {
             name: Set(file_type_name),
         };
 
-        let created_type = new_file_type
-            .insert(connection)
-            .await
-            .map_err(|e| DbError::with_source(
+        let created_type = new_file_type.insert(connection).await.map_err(|e| {
+            DbError::with_source(
                 DbErrorKind::InsertError,
                 "Failed to insert file type".to_string(),
                 e,
-            ))?;
+            )
+        })?;
 
         Ok(created_type.id)
     }
@@ -220,7 +364,7 @@ impl FileOperations {
                     "doc" | "docx" => "document",
                     "xls" | "xlsx" => "spreadsheet",
                     "ppt" | "pptx" => "presentation",
-                    
+
                     // Image types
                     "jpg" | "jpeg" => "image_jpeg",
                     "png" => "image_png",
@@ -228,13 +372,13 @@ impl FileOperations {
                     "svg" => "image_svg",
                     "webp" => "image_webp",
                     "bmp" => "image_bmp",
-                    
+
                     // Video types
                     "mp4" | "avi" | "mkv" | "mov" | "wmv" | "flv" => "video",
-                    
+
                     // Audio types
                     "mp3" | "wav" | "flac" | "ogg" | "aac" => "audio",
-                    
+
                     // Code types
                     "rs" => "rust",
                     "js" | "ts" => "javascript",
@@ -249,10 +393,10 @@ impl FileOperations {
                     "xml" => "xml",
                     "yaml" | "yml" => "yaml",
                     "toml" => "toml",
-                    
+
                     // Archive types
                     "zip" | "rar" | "7z" | "tar" | "gz" | "bz2" => "archive",
-                    
+
                     // Default
                     _ => {
                         return format!("ext_{}", ext_lower);
@@ -272,42 +416,57 @@ impl FileOperations {
     }
 
     /// Get file by path
-    pub async fn get_file_by_path(&self, file_path: &Path) -> Result<Option<files::Model>, DbError> {
+    pub async fn get_file_by_path(
+        &self,
+        file_path: &Path,
+    ) -> Result<Option<files::Model>, DbError> {
         let path_str = file_path.to_string_lossy().to_string();
-        
+        let connection = self.database_manager.get_connection();
+
         Files::find()
             .filter(files::Column::Path.eq(&path_str))
-            .one(&*self.connection)
+            .one(&*connection)
             .await
-            .map_err(|e| DbError::with_source(
-                DbErrorKind::QueryError,
-                "Failed to query file by path".to_string(),
-                e,
-            ))
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::QueryError,
+                    "Failed to query file by path".to_string(),
+                    e,
+                )
+            })
     }
 
     /// Get all files in a directory
-    pub async fn get_files_in_directory(&self, dir_path: &Path) -> Result<Vec<files::Model>, DbError> {
+    pub async fn get_files_in_directory(
+        &self,
+        dir_path: &Path,
+    ) -> Result<Vec<files::Model>, DbError> {
         let dir_str = dir_path.to_string_lossy().to_string();
         let pattern = format!("{}%", dir_str);
-        
+        let connection = self.database_manager.get_connection();
+
         Files::find()
             .filter(files::Column::Path.like(&pattern))
-            .all(&*self.connection)
+            .all(&*connection)
             .await
-            .map_err(|e| DbError::with_source(
-                DbErrorKind::QueryError,
-                "Failed to query files in directory".to_string(),
-                e,
-            ))
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::QueryError,
+                    "Failed to query files in directory".to_string(),
+                    e,
+                )
+            })
     }
 
     // === BULK OPERATIONS FOR SCANNER ===
 
     /// Get directory state as a map for efficient comparison
-    pub async fn get_directory_state(&self, dir_path: &Path) -> Result<HashMap<PathBuf, FileMetadata>, DbError> {
+    pub async fn get_directory_state(
+        &self,
+        dir_path: &Path,
+    ) -> Result<HashMap<PathBuf, FileMetadata>, DbError> {
         let files = self.get_files_in_directory(dir_path).await?;
-        
+
         let mut state = HashMap::new();
         for file in files {
             let metadata = FileMetadata {
@@ -320,19 +479,25 @@ impl FileOperations {
             };
             state.insert(PathBuf::from(file.path), metadata);
         }
-        
+
         Ok(state)
     }
 
     /// Get file hashes as a map for quick comparison
-    pub async fn get_file_hashes_map(&self, dir_path: &Path) -> Result<HashMap<PathBuf, (String, String)>, DbError> {
+    pub async fn get_file_hashes_map(
+        &self,
+        dir_path: &Path,
+    ) -> Result<HashMap<PathBuf, (String, String)>, DbError> {
         let files = self.get_files_in_directory(dir_path).await?;
-        
+
         let mut hashes = HashMap::new();
         for file in files {
-            hashes.insert(PathBuf::from(file.path), (file.content_hash, file.identity_hash));
+            hashes.insert(
+                PathBuf::from(file.path),
+                (file.content_hash, file.identity_hash),
+            );
         }
-        
+
         Ok(hashes)
     }
 
@@ -342,7 +507,8 @@ impl FileOperations {
             return Ok(0);
         }
 
-        let transaction = self.connection.begin().await.map_err(|e| {
+        let connection = self.database_manager.get_connection();
+        let transaction = connection.begin().await.map_err(|e| {
             DbError::with_source(
                 DbErrorKind::TransactionError,
                 "Failed to start batch upsert transaction".to_string(),
@@ -354,13 +520,19 @@ impl FileOperations {
 
         for file_info in files {
             // Get or create file type (with caching)
-            let file_type_id = self.get_or_create_file_type_cached(&file_info.file_type_name, &transaction).await?;
+            let file_type_id = self
+                .get_or_create_file_type_cached(&file_info.file_type_name, &transaction)
+                .await?;
 
             // Get file system identifier
             let file_system_id = if let Some(fsi_id) = file_info.file_system_id {
                 fsi_id
             } else {
-                self.get_or_create_file_system_identifier(&file_info.path).await?
+                self.get_or_create_file_system_identifier_with_connection(
+                    &file_info.path,
+                    &transaction,
+                )
+                .await?
             };
 
             // Check if file exists
@@ -368,11 +540,13 @@ impl FileOperations {
                 .filter(files::Column::Path.eq(&file_info.path.to_string_lossy().to_string()))
                 .one(&transaction)
                 .await
-                .map_err(|e| DbError::with_source(
-                    DbErrorKind::QueryError,
-                    "Failed to check existing file in batch upsert".to_string(),
-                    e,
-                ))?;
+                .map_err(|e| {
+                    DbError::with_source(
+                        DbErrorKind::QueryError,
+                        "Failed to check existing file in batch upsert".to_string(),
+                        e,
+                    )
+                })?;
 
             if let Some(existing) = existing_file {
                 // Update existing file
@@ -434,19 +608,23 @@ impl FileOperations {
             return Ok(0);
         }
 
-        let path_strings: Vec<String> = paths.iter()
+        let path_strings: Vec<String> = paths
+            .iter()
             .map(|p| p.to_string_lossy().to_string())
             .collect();
 
+        let connection = self.database_manager.get_connection();
         let result = Files::delete_many()
             .filter(files::Column::Path.is_in(path_strings))
-            .exec(&*self.connection)
+            .exec(&*connection)
             .await
-            .map_err(|e| DbError::with_source(
-                DbErrorKind::DeleteError,
-                "Failed to batch delete files".to_string(),
-                e,
-            ))?;
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::DeleteError,
+                    "Failed to batch delete files".to_string(),
+                    e,
+                )
+            })?;
 
         Ok(result.rows_affected as usize)
     }
@@ -475,7 +653,9 @@ impl FileOperations {
         }
 
         // Not in cache, get or create from database
-        let type_id = self.get_or_create_file_type_by_name(file_type_name, connection).await?;
+        let type_id = self
+            .get_or_create_file_type_by_name(file_type_name, connection)
+            .await?;
 
         // Update cache
         {
@@ -500,11 +680,13 @@ impl FileOperations {
             .filter(file_types::Column::Name.eq(file_type_name))
             .one(connection)
             .await
-            .map_err(|e| DbError::with_source(
-                DbErrorKind::QueryError,
-                "Failed to query file type by name".to_string(),
-                e,
-            ))?
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::QueryError,
+                    "Failed to query file type by name".to_string(),
+                    e,
+                )
+            })?
         {
             return Ok(existing_type.id);
         }
@@ -527,9 +709,13 @@ impl FileOperations {
     }
 
     /// Get or create file system identifier based on file metadata
-    pub async fn get_or_create_file_system_identifier(&self, file_path: &Path) -> Result<i32, DbError> {
+    pub async fn get_or_create_file_system_identifier<C: ConnectionTrait>(
+        &self,
+        file_path: &Path,
+        transaction: &C,
+    ) -> Result<i32, DbError> {
         use std::os::unix::fs::MetadataExt;
-        
+
         let metadata = std::fs::metadata(file_path).map_err(|e| {
             DbError::with_source(
                 DbErrorKind::QueryError,
@@ -547,13 +733,15 @@ impl FileOperations {
         let existing_fsi = file_system_identifier::Entity::find()
             .filter(file_system_identifier::Column::Inode.eq(inode))
             .filter(file_system_identifier::Column::DeviceNum.eq(device_num))
-            .one(&*self.connection)
+            .one(transaction)
             .await
-            .map_err(|e| DbError::with_source(
-                DbErrorKind::QueryError,
-                "Failed to query file system identifier".to_string(),
-                e,
-            ))?;
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::QueryError,
+                    "Failed to query file system identifier".to_string(),
+                    e,
+                )
+            })?;
 
         if let Some(fsi) = existing_fsi {
             return Ok(fsi.id);
@@ -568,7 +756,69 @@ impl FileOperations {
             volume_serial_num: Set(volume_serial_num),
         };
 
-        let created_fsi = new_fsi.insert(&*self.connection).await.map_err(|e| {
+        let created_fsi = new_fsi.insert(transaction).await.map_err(|e| {
+            DbError::with_source(
+                DbErrorKind::InsertError,
+                "Failed to insert file system identifier".to_string(),
+                e,
+            )
+        })?;
+
+        Ok(created_fsi.id)
+    }
+
+    /// Get or create file system identifier based on file metadata (transaction-aware)
+    pub async fn get_or_create_file_system_identifier_with_connection<C>(
+        &self,
+        file_path: &Path,
+        connection: &C,
+    ) -> Result<i32, DbError>
+    where
+        C: ConnectionTrait,
+    {
+        use std::os::unix::fs::MetadataExt;
+
+        let metadata = std::fs::metadata(file_path).map_err(|e| {
+            DbError::with_source(
+                DbErrorKind::QueryError,
+                format!("Failed to get file metadata for {}", file_path.display()),
+                e,
+            )
+        })?;
+
+        let inode = metadata.ino() as i32;
+        let device_num = metadata.dev() as i32;
+        let index_num = metadata.ino() as i32;
+        let volume_serial_num = 0; // Unix systems don't have volume serial numbers
+
+        // Check if file system identifier already exists
+        let existing_fsi = file_system_identifier::Entity::find()
+            .filter(file_system_identifier::Column::Inode.eq(inode))
+            .filter(file_system_identifier::Column::DeviceNum.eq(device_num))
+            .one(connection)
+            .await
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::QueryError,
+                    "Failed to query file system identifier".to_string(),
+                    e,
+                )
+            })?;
+
+        if let Some(fsi) = existing_fsi {
+            return Ok(fsi.id);
+        }
+
+        // Create new file system identifier
+        let new_fsi = file_system_identifier::ActiveModel {
+            id: sea_orm::ActiveValue::NotSet,
+            inode: Set(inode),
+            device_num: Set(device_num),
+            index_num: Set(index_num),
+            volume_serial_num: Set(volume_serial_num),
+        };
+
+        let created_fsi = new_fsi.insert(connection).await.map_err(|e| {
             DbError::with_source(
                 DbErrorKind::InsertError,
                 "Failed to insert file system identifier".to_string(),
@@ -581,14 +831,14 @@ impl FileOperations {
 
     /// Preload common file types into cache
     pub async fn preload_file_type_cache(&self) -> Result<(), DbError> {
-        let all_types = FileTypes::find()
-            .all(&*self.connection)
-            .await
-            .map_err(|e| DbError::with_source(
+        let connection = self.database_manager.get_connection();
+        let all_types = FileTypes::find().all(&*connection).await.map_err(|e| {
+            DbError::with_source(
                 DbErrorKind::QueryError,
                 "Failed to preload file types".to_string(),
                 e,
-            ))?;
+            )
+        })?;
 
         let mut cache = self.file_type_cache.write().await;
         for file_type in all_types {

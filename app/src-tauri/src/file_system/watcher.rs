@@ -6,6 +6,7 @@ use notify::{Error, RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{
     new_debouncer, DebounceEventResult, DebouncedEvent, Debouncer, RecommendedCache,
 };
+use std::fmt::format;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -216,7 +217,22 @@ impl FileWatcher {
     ) -> Result<(), AppError> {
         let kind = event.kind;
         let paths = event.paths.to_owned();
-        let hash = FileHash::hash(&paths[0]).await?;
+        println!("{:?}", paths);
+
+        let hash = FileHash::hash(match &paths.last() {
+            Some(x) => x,
+            None => {
+                return Err(AppError::Categorized {
+                    kind: AppErrorKind::FileError,
+                    message: String::from(
+                    "Error while trying to extract last path: There is no path to be extracted.",
+                ),
+                    source: None,
+                });
+            }
+        })
+        .await?;
+
         let file_event = FileEvent::new(event, kind, paths, hash);
         println!("Constructed FileEvent from Raw Stream");
 

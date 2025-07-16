@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use aes_gcm::{aead::Aead, Aes256Gcm, Key, KeyInit, Nonce};
 
@@ -487,20 +487,21 @@ impl Default for SqliteConfig {
     fn default() -> Self {
         // Use a default path relative to the app directory
         let preamble = String::from("sqlite://");
-        // let app_dir = std::env::current_dir()
-        //     .unwrap_or_else(|_| PathBuf::from("."))
-        //     .to_string_lossy()
-        //     .to_string();
-        let app_dir = String::from("/home/emmi/projects/projects/hestia_tauri/app/");
-        println!("{:?}", app_dir);
-        let suffix = String::from("main.sqlite?mode=rw");
+        let app_dir = std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .to_string_lossy()
+            .to_string();
+        let suffix = String::from("/main.sqlite?mode=rw");
 
         let con_string = format!("{}{}{}", preamble, app_dir, suffix);
+        println!("{}", con_string);
 
         Self {
             con_string,
             create_if_missing: true,
-            connection_timeout_ms: 5000,
+            connection_timeout_ms: 30000,
             journal_mode: SqliteJournalMode::Wal,
             synchronous: SqliteSynchronous::Normal,
         }
