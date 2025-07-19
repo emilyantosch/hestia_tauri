@@ -156,7 +156,9 @@ impl FileWatcher {
                     match res {
                         Ok(events) => {
                             for event in events {
-                                if let Err(e) = to_file_event_and_send(event, &p_tx_clone).await {
+                                if let Err(e) =
+                                    to_file_or_folder_event_and_send(event, &p_tx_clone).await
+                                {
                                     eprintln!("Failed to process event: {:?}", e);
                                 }
                             }
