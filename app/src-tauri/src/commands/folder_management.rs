@@ -1,6 +1,6 @@
 use async_recursion::async_recursion;
 use sea_orm::PaginatorTrait;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -9,8 +9,9 @@ use tauri::{command, State};
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set};
 
 use super::file_operations::FileInfo;
-use crate::database::DatabaseManager;
+use crate::{database::DatabaseManager, errors::file};
 
+use crate::database::FileOperations;
 use entity::{files, folders, prelude::*};
 
 /// Folder information for frontend display
@@ -187,24 +188,18 @@ pub async fn get_files_in_folder(
 /// Get folder tree structure starting from a root folder
 #[command]
 pub async fn get_folder_tree(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    file_operations: State<'_, Arc<FileOperations>>,
     root_folder_id: Option<i32>,
 ) -> Result<Vec<FolderTree>, String> {
-    let connection = db_manager.get_connection();
-
     // Get root folders if no specific root is provided
     let root_folders = if let Some(root_id) = root_folder_id {
-        match folders::Entity::find_by_id(root_id).one(&*connection).await {
+        match file_operations.find_folder_by_id(root_id).await {
             Ok(Some(folder)) => vec![folder],
             Ok(None) => return Err("Root folder not found".to_string()),
             Err(e) => return Err(format!("Failed to get root folder: {}", e)),
         }
     } else {
-        match folders::Entity::find()
-            .filter(folders::Column::ParentFolderId.is_null())
-            .all(&*connection)
-            .await
-        {
+        match file_operations.find_root_folders().await {
             Ok(folders) => folders,
             Err(e) => return Err(format!("Failed to get root folders: {}", e)),
         }
@@ -213,48 +208,42 @@ pub async fn get_folder_tree(
     // Build tree for each root folder
     let mut trees = Vec::new();
     for root_folder in root_folders {
-        match build_folder_tree(&connection, root_folder).await {
+        match build_folder_tree(&file_operations, root_folder).await {
             Ok(tree) => trees.push(tree),
             Err(e) => return Err(format!("Failed to build folder tree: {}", e)),
         }
     }
-
     Ok(trees)
 }
 
 /// Recursive function to build folder tree
 #[async_recursion]
 async fn build_folder_tree(
-    connection: &sea_orm::DatabaseConnection,
+    file_operations: &State<'_, Arc<FileOperations>>,
     folder: folders::Model,
 ) -> Result<FolderTree, String> {
     let folder_id = folder.id;
     let folder_path = folder.path.clone();
 
     // Get subfolders
-    let subfolders = match folders::Entity::find()
-        .filter(folders::Column::ParentFolderId.eq(folder_id))
-        .all(connection)
-        .await
-    {
-        Ok(folders) => folders,
+    let subfolders = match file_operations.find_subfolders_of_folder(folder_id).await {
+        Ok(subfolder) => subfolder,
         Err(e) => return Err(format!("Failed to get subfolders: {}", e)),
     };
 
     // Build trees for subfolders
     let mut children = Vec::new();
     for subfolder in subfolders {
-        match build_folder_tree(connection, subfolder).await {
+        match build_folder_tree(file_operations, subfolder).await {
             Ok(child_tree) => children.push(child_tree),
             Err(e) => return Err(format!("Failed to build child tree: {}", e)),
         }
     }
 
     // Get files in this folder
-    let folder_path_buf = PathBuf::from(&folder_path);
-    let files = match files::Entity::find()
-        .filter(files::Column::Path.like(&format!("{}%", folder_path)))
-        .all(connection)
+    let folder_path_path = Path::new(&folder_path);
+    let files = match file_operations
+        .get_files_in_directory(folder_path_path)
         .await
     {
         Ok(files) => {
@@ -264,7 +253,7 @@ async fn build_folder_tree(
                 .filter(|file| {
                     let file_path = PathBuf::from(&file.path);
                     if let Some(parent) = file_path.parent() {
-                        parent == folder_path_buf
+                        parent == folder_path_path
                     } else {
                         false
                     }
@@ -502,4 +491,3 @@ pub async fn get_folder_statistics(
 
     Ok(serde_json::Value::Object(result))
 }
-

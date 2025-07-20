@@ -101,6 +101,63 @@ impl FileOperations {
         Ok(parent_folder_id)
     }
 
+    pub async fn find_folder_by_id(&self, fsi_id: i32) -> Result<Option<folders::Model>, DbError> {
+        let connection = self.database_manager.get_connection();
+        let folder = Folders::find()
+            .filter(folders::Column::Id.eq(fsi_id))
+            .one(&*connection)
+            .await
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::QueryError,
+                    format!("Could not find folder with id: {}", fsi_id),
+                    e,
+                )
+            })?;
+
+        Ok(folder)
+    }
+
+    pub async fn find_root_folders(&self) -> Result<Vec<folders::Model>, DbError> {
+        let connection = self.database_manager.get_connection();
+        let root_folders = Folders::find()
+            .filter(folders::Column::ParentFolderId.is_null())
+            .all(&*connection)
+            .await
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::QueryError,
+                    "Could not find root_folders with id: {}".to_string(),
+                    e,
+                )
+            })?;
+
+        Ok(root_folders)
+    }
+
+    pub async fn find_subfolders_of_folder(
+        &self,
+        folder_id: i32,
+    ) -> Result<Vec<folders::Model>, DbError> {
+        let connection = self.database_manager.get_connection();
+        let subfolders = Folders::find()
+            .filter(folders::Column::ParentFolderId.eq(folder_id))
+            .all(&*connection)
+            .await
+            .map_err(|e| {
+                DbError::with_source(
+                    DbErrorKind::QueryError,
+                    format!(
+                        "Could not find subfolders for folder with id: {}",
+                        folder_id
+                    ),
+                    e,
+                )
+            })?;
+
+        Ok(subfolders)
+    }
+
     pub async fn upsert_folder_from_event(
         &self,
         event: &FolderEvent,
