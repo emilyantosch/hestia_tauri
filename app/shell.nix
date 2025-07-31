@@ -10,6 +10,9 @@ pkgs.mkShell {
     xorg.libX11
     atk
     webkitgtk_4_1
+    nodejs
+    deno
+    unixtools.netstat
     lsb-release
     xdg-utils
     sqlite

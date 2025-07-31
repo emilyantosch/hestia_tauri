@@ -12,6 +12,11 @@ use crate::errors::AppError;
 use crate::file_system::{DirectoryScanner, FileWatcher};
 use std::path::PathBuf;
 use tauri::Manager;
+use tracing::{debug, error, info, warn};
+use tracing_subscriber::fmt;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -25,7 +30,25 @@ impl AppBuilder {
         Self {}
     }
 
+    fn init_tracing() {
+        let filter = std::env::var("RUST_LOG")
+            .map(|_| EnvFilter::from_default_env())
+            .unwrap_or_else(|_| EnvFilter::new("info"));
+        let fmt_layer = fmt::layer()
+            .with_target(false)
+            .with_thread_ids(true)
+            .with_file(true)
+            .with_line_number(true);
+
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(fmt_layer)
+            .init();
+    }
+
     pub async fn build(self) -> Result<App, AppError> {
+        //Init the tracing
+        Self::init_tracing();
         // Initialize database with default SQLite configuration
         let database_manager = DatabaseManager::new_sqlite_default().await?;
 
@@ -52,7 +75,7 @@ impl App {
 
         // Preload file type cache for better performance
         if let Err(e) = file_operations.preload_file_type_cache().await {
-            eprintln!("Warning: Failed to preload file type cache: {:?}", e);
+            warn!("Failed to preload file type cache: {:?}", e);
         }
 
         let watch_directory =
@@ -66,34 +89,34 @@ impl App {
             .to_path_buf();
         watch_directory.push(std::path::Path::new("test_vault"));
         // === INITIAL DIRECTORY SCAN ===
-        println!("Starting initial directory scan...");
+        info!("Starting initial directory scan...");
         let scanner = DirectoryScanner::new(file_operations.clone());
 
         match scanner.sync_directory(&watch_directory).await {
             Ok(report) => {
-                println!("Initial scan completed successfully!");
-                println!("  - Files scanned: {}", report.files_scanned);
-                println!("  - Files inserted: {}", report.files_inserted);
-                println!("  - Files updated: {}", report.files_updated);
-                println!("  - Files deleted: {}", report.files_deleted);
-                println!("  - Total operations: {}", report.total_operations());
-                println!("  - Duration: {:?}", report.duration);
+                info!("Initial scan completed successfully!");
+                info!("  - Files scanned: {}", report.files_scanned);
+                info!("  - Files inserted: {}", report.files_inserted);
+                info!("  - Files updated: {}", report.files_updated);
+                info!("  - Files deleted: {}", report.files_deleted);
+                info!("  - Total operations: {}", report.total_operations());
+                info!("  - Duration: {:?}", report.duration);
 
                 if !report.errors.is_empty() {
-                    println!("  - Errors encountered:");
+                    info!("  - Errors encountered:");
                     for error in &report.errors {
-                        println!("    • {}", error);
+                        info!("    • {}", error);
                     }
                 }
             }
             Err(e) => {
-                eprintln!("Initial directory scan failed: {:?}", e);
-                eprintln!("Continuing with file watcher anyway...");
+                error!("Initial directory scan failed: {:?}", e);
+                error!("Continuing with file watcher anyway...");
             }
         }
 
         // === START FILE WATCHER ===
-        println!("Starting real-time file watcher...");
+        info!("Starting real-time file watcher...");
         let mut watcher = FileWatcher::new_with_database(file_operations.clone())
             .await
             .unwrap();
@@ -102,11 +125,11 @@ impl App {
         // Watch the test vault directory
         watcher.watch(&watch_directory).await.unwrap();
 
-        println!(
+        debug!(
             "File watcher started! Monitoring: {}",
             watch_directory.display()
         );
-        println!("Application is now running. Press Ctrl+C to stop.");
+        info!("Application is now running. Press Ctrl+C to stop.");
 
         // Keep the application running
         loop {
@@ -127,18 +150,18 @@ pub fn run() {
         // Initialize the app with database
         match AppBuilder::new().build().await {
             Ok(app) => {
-                println!("App initialized successfully with database connection");
+                info!("App initialized successfully with database connection");
 
                 // Start the file watching system in a background task
                 let app_clone = app.clone();
                 tokio::spawn(async move {
                     if let Err(e) = app_clone.run().await {
-                        eprintln!("Error running file watcher: {:?}", e);
+                        error!("Error running file watcher: {:?}", e);
                     }
                 });
             }
             Err(e) => {
-                eprintln!("Failed to initialize app: {:?}", e);
+                error!("Failed to initialize app: {:?}", e);
             }
         }
     });
@@ -163,7 +186,7 @@ pub fn run() {
             // Preload file type cache for better performance
             rt.block_on(async {
                 if let Err(e) = file_operations.preload_file_type_cache().await {
-                    eprintln!("Warning: Failed to preload file type cache: {:?}", e);
+                    error!("Warning: Failed to preload file type cache: {:?}", e);
                 }
             });
 
@@ -171,7 +194,7 @@ pub fn run() {
             app.manage(file_operations);
             app.manage(file_scanner);
 
-            println!("FileOperations initialized and managed as application state");
+            info!("FileOperations initialized and managed as application state");
 
             Ok(())
         })

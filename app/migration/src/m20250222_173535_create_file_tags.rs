@@ -29,7 +29,7 @@ enum FileSystemIdentifier {
 }
 
 #[derive(DeriveIden)]
-enum Folders {
+pub enum Folders {
     Table,
     _ID,
     ContentHash,
@@ -158,7 +158,7 @@ impl MigrationTrait for Migration {
                         &mut ForeignKey::create()
                             .name("C_FK_FOLDER_PARENTFOLDER_ID")
                             .from(Folders::Table, Folders::ParentFolderId)
-                            .to(FileSystemIdentifier::Table, Folders::_ID)
+                            .to(Folders::Table, Folders::_ID)
                             .to_owned(),
                     )
                     .col(pk_auto(Folders::_ID))
@@ -166,7 +166,7 @@ impl MigrationTrait for Migration {
                     .col(string(Folders::IdentityHash))
                     .col(string(Folders::StructureHash))
                     .col(integer(Folders::FileSystemId))
-                    .col(integer(Folders::ParentFolderId))
+                    .col(integer(Folders::ParentFolderId).null())
                     .col(string(Folders::Name))
                     .col(string(Folders::Path))
                     .col(date_time(Folders::CreatedAt))

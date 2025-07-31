@@ -11,7 +11,7 @@ pub struct Model {
     pub identity_hash: String,
     pub structure_hash: String,
     pub file_system_id: i32,
-    pub parent_folder_id: i32,
+    pub parent_folder_id: Option<i32>,
     pub name: String,
     pub path: String,
     pub created_at: DateTime,

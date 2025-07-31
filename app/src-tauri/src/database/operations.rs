@@ -54,7 +54,7 @@ impl FileOperations {
         &self,
         folder_path: &PathBuf,
         transaction: &C,
-    ) -> Result<i32, DbError> {
+    ) -> Result<Option<i32>, DbError> {
         let folder_with_pfi = Folders::find()
             .filter(folders::Column::Path.eq(folder_path.to_string_lossy().to_string()))
             .one(transaction)
@@ -88,12 +88,9 @@ impl FileOperations {
                         e,
                     )
                 })? {
-                Some(model) => model.id,
+                Some(model) => Some(model.id),
                 None => {
-                    return Err(DbError::new(
-                        DbErrorKind::QueryError,
-                        "Failed to find model from database".to_string(),
-                    ))
+                    return Ok(None);
                 }
             }
         };

@@ -35,7 +35,7 @@ impl From<folders::Model> for FolderInfo {
             id: folder.id,
             name: folder.name,
             path: folder.path,
-            parent_folder_id: Some(folder.parent_folder_id),
+            parent_folder_id: folder.parent_folder_id,
             content_hash: folder.content_hash,
             identity_hash: folder.identity_hash,
             structure_hash: folder.structure_hash,
@@ -390,7 +390,7 @@ pub async fn get_folder_path_hierarchy(
             .await
         {
             Ok(Some(folder)) => {
-                current_folder_id = Some(folder.parent_folder_id);
+                current_folder_id = folder.parent_folder_id;
                 hierarchy.push(folder.into());
             }
             Ok(None) => break,

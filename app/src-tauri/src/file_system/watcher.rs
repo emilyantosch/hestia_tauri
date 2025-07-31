@@ -117,7 +117,12 @@ impl FileWatcher {
             db_operations: Some(db_operations),
         })
     }
-
+    //FIXME: This function works. However, the configuration of the paths will need to be
+    //controlled, since each library/configuration will need a root folder. Each folder path that
+    //is watched by the watcher is not added to the database and therefore needs to get added
+    //separately. This is true for each folder added to watcher, but also changes based on the
+    //library that is currently being looked at. I assume we want to use different db files for
+    //different vault configs.
     pub async fn watch(&mut self, path: &Path) -> Result<(), AppError> {
         if !path.exists() {
             let error_path = vec![path.to_path_buf()];
