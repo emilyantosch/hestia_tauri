@@ -1,3 +1,4 @@
+use crate::errors::{FileError, FileErrorKind};
 use std::path::Path;
 
 #[derive(Debug)]
@@ -12,9 +13,20 @@ pub enum FileId {
     },
 }
 impl FileId {
-    pub async fn extract(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
+    #[cfg(target_family = "unix")]
+    pub async fn extract(path: impl AsRef<Path>) -> Result<Self, FileError> {
+        use crate::errors::FileError;
         use std::os::unix::fs::MetadataExt;
-        let metadata = std::fs::metadata(path.as_ref())?;
+
+        let metadata = tokio::fs::metadata(path.as_ref()).await.map_err(|e| {
+            FileError::with_source(
+                FileErrorKind::FileIdExtractionError,
+                format!("The FileId could not get extracted: {:?}", e.to_string()),
+                e,
+                Some(vec![path.as_ref().into()]),
+            )
+        })?;
+
         Ok(FileId::Inode {
             device_id: metadata.dev(),
             inode_num: metadata.ino(),
@@ -36,5 +48,33 @@ impl FileId {
             .access_mode(0)
             .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
             .open(path)
+    }
+}
+
+impl PartialEq for FileId {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                FileId::Inode {
+                    device_id: dev1,
+                    inode_num: num1,
+                },
+                FileId::Inode {
+                    device_id: dev2,
+                    inode_num: num2,
+                },
+            ) => dev1 == dev2 && num1 == num2,
+            (
+                FileId::Index {
+                    volume_serial_num: vol1,
+                    file_index: idx1,
+                },
+                FileId::Index {
+                    volume_serial_num: vol2,
+                    file_index: idx2,
+                },
+            ) => vol1 == vol2 && idx1 == idx2,
+            _ => false,
+        }
     }
 }

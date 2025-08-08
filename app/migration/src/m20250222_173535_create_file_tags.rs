@@ -1,3 +1,4 @@
+use async_std::fs::File;
 use sea_orm_migration::{prelude::*, schema::*};
 
 #[derive(DeriveMigrationName)]
@@ -7,12 +8,37 @@ pub struct Migration;
 enum Files {
     Table,
     _ID,
-    DeviceNum,
-    Inode,
+    ContentHash,
+    IdentityHash,
+    FileSystemId,
     Name,
-    Hash,
     Path,
     FileTypeID,
+    CreatedAt,
+    UpdatedAt,
+}
+
+#[derive(DeriveIden)]
+enum FileSystemIdentifier {
+    Table,
+    _ID,
+    Inode,
+    DeviceNum,
+    VolumeSerialNum,
+    IndexNum,
+}
+
+#[derive(DeriveIden)]
+pub enum Folders {
+    Table,
+    _ID,
+    ContentHash,
+    IdentityHash,
+    StructureHash,
+    FileSystemId,
+    ParentFolderId,
+    Name,
+    Path,
     CreatedAt,
     UpdatedAt,
 }
@@ -65,12 +91,19 @@ impl MigrationTrait for Migration {
                             .to(FileTypes::Table, FileTypes::_ID)
                             .to_owned(),
                     )
+                    .foreign_key(
+                        &mut ForeignKey::create()
+                            .name("C_FK_FILES_FILESYSTEMIDENTIFIER_FILESYSTEMID_ID")
+                            .from(Files::Table, Files::FileSystemId)
+                            .to(FileSystemIdentifier::Table, FileSystemIdentifier::_ID)
+                            .to_owned(),
+                    )
                     .col(pk_auto(Files::_ID))
-                    .col(pk_auto(Files::DeviceNum))
-                    .col(pk_auto(Files::Inode))
+                    .col(integer(Files::FileSystemId))
                     .col(string(Files::Name))
                     .col(string(Files::Path))
-                    .col(string(Files::Hash))
+                    .col(string(Files::ContentHash))
+                    .col(string(Files::IdentityHash))
                     .col(integer(Files::FileTypeID))
                     .col(date_time(Files::CreatedAt))
                     .col(date_time(Files::UpdatedAt))
@@ -87,6 +120,71 @@ impl MigrationTrait for Migration {
                     .table(Files::Table)
                     .col(Files::_ID)
                     .col(Files::Path)
+                    .to_owned(),
+            )
+            .await
+            .expect("Failed to create index for table files");
+
+        // FileSystemIdentifier Migration
+        manager
+            .create_table(
+                Table::create()
+                    .table(FileSystemIdentifier::Table)
+                    .if_not_exists()
+                    .col(pk_auto(FileSystemIdentifier::_ID))
+                    .col(integer(FileSystemIdentifier::Inode))
+                    .col(integer(FileSystemIdentifier::DeviceNum))
+                    .col(integer(FileSystemIdentifier::IndexNum))
+                    .col(integer(FileSystemIdentifier::VolumeSerialNum))
+                    .to_owned(),
+            )
+            .await
+            .expect("Could not create FileSystemIdentifier");
+
+        // Folder Migration
+        manager
+            .create_table(
+                Table::create()
+                    .table(Folders::Table)
+                    .if_not_exists()
+                    .foreign_key(
+                        &mut ForeignKey::create()
+                            .name("C_FK_FOLDER_FILESYSTEMIDENTIFIER_FILESYSTEMID_ID")
+                            .from(Folders::Table, Folders::FileSystemId)
+                            .to(FileSystemIdentifier::Table, FileSystemIdentifier::_ID)
+                            .to_owned(),
+                    )
+                    .foreign_key(
+                        &mut ForeignKey::create()
+                            .name("C_FK_FOLDER_PARENTFOLDER_ID")
+                            .from(Folders::Table, Folders::ParentFolderId)
+                            .to(Folders::Table, Folders::_ID)
+                            .to_owned(),
+                    )
+                    .col(pk_auto(Folders::_ID))
+                    .col(string(Folders::ContentHash))
+                    .col(string(Folders::IdentityHash))
+                    .col(string(Folders::StructureHash))
+                    .col(integer(Folders::FileSystemId))
+                    .col(integer(Folders::ParentFolderId).null())
+                    .col(string(Folders::Name))
+                    .col(string(Folders::Path))
+                    .col(date_time(Folders::CreatedAt))
+                    .col(date_time(Folders::UpdatedAt))
+                    .to_owned(),
+            )
+            .await
+            .expect("Could not create table Folder");
+
+        manager
+            .create_index(
+                Index::create()
+                    .table(Folders::Table)
+                    .if_not_exists()
+                    .col(Folders::_ID)
+                    .col(Folders::FileSystemId)
+                    .col(Folders::ParentFolderId)
+                    .name("IDX_")
                     .to_owned(),
             )
             .await

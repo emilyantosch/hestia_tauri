@@ -3,7 +3,9 @@
 pub mod prelude;
 
 pub mod file_has_tags;
+pub mod file_system_identifier;
 pub mod file_types;
 pub mod files;
+pub mod folders;
 pub mod tag_has_tags;
 pub mod tags;
