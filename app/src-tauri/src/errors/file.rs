@@ -38,8 +38,8 @@ impl std::fmt::Display for FileError {
 impl From<std::io::Error> for FileError {
     fn from(other: std::io::Error) -> Self {
         FileError {
-            kind: FileErrorKind::FileIdExtractionError,
-            message: format!("An IO error occured: {:?}", other),
+            kind: FileErrorKind::Io,
+            message: format!("An IO error occured: {other:#?}"),
             source: Some(Box::new(other)),
             paths: None,
         }

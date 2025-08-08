@@ -12,6 +12,7 @@ use crate::errors::AppError;
 use crate::file_system::{DirectoryScanner, FileWatcher};
 use std::path::PathBuf;
 use tauri::Manager;
+use tauri::WebviewWindowBuilder;
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
@@ -166,6 +167,7 @@ pub fn run() {
         }
     });
 
+    // tauri::Builder::default()
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
