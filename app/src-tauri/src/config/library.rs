@@ -1,6 +1,6 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{fmt::write, fs::File, str::FromStr, sync::Arc};
-use tokio::sync::Mutex;
+use tokio::{io::AsyncWriteExt, sync::Mutex};
 use tracing::{error, info};
 
 use crate::errors::{FileError, FileErrorKind};
@@ -11,12 +11,12 @@ pub struct Library {
     pub library_config: Arc<Mutex<Option<LibraryConfig>>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
 pub struct LibraryConfig {
-    pub library_paths: Option<LibraryPathConfig>,
+    pub library_paths: Option<Vec<LibraryPathConfig>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct LibraryPathConfig {
     name: Option<String>,
     path: Option<PathBuf>,
@@ -67,9 +67,97 @@ impl Library {
         Ok(datahome)
     }
 
-    //TODO: There still needs to be a method to save to disk.
-    pub async fn save_config(&self) -> Result<(), FileError> {
-        Ok(())
+    /// Save the config into a file on the disk that is specified in the share path of the Library
+    /// Returns:
+    ///     - Ok(true): The save to disk was a success
+    ///     - Ok(false): The save to disk was a success, but the file had to be created
+    ///     - Err: The save to disk failed either because share path was not set or the write to the file failed
+    pub async fn save_config(&self) -> Result<bool, FileError> {
+        let config_path = match self.share_path.as_deref() {
+            Some(path) => path.join("config.toml"),
+            None => {
+                return Err(FileError::new(
+                    FileErrorKind::Io,
+                    format!("No config path found at!"),
+                    None,
+                ));
+            }
+        };
+
+        match tokio::fs::try_exists(&config_path).await {
+            Ok(true) => {
+                let mut file = tokio::fs::OpenOptions::new()
+                    .create(false)
+                    .write(true)
+                    .truncate(true)
+                    .open(&config_path)
+                    .await?;
+                {
+                    let lib_lock = self.library_config.lock().await;
+                    match lib_lock.as_ref() {
+                        Some(lib) => {
+                            let paths = lib.library_paths.as_ref().unwrap();
+                            let content = toml::to_string(paths).map_err(|e| {
+                                FileError::with_source(
+                        FileErrorKind::Io,
+                        format!("An error occurred while trying to parse toml at {config_path:#?}"),
+                        e,
+                        Some(vec![config_path.to_owned()]),
+                            )
+                            })?;
+                            file.write_all(content.as_bytes()).await?;
+                        }
+                        None => {
+                            return Err(FileError::new(
+                                FileErrorKind::InvalidConfigError,
+                                format!("Library Config not found"),
+                                None,
+                            ))
+                        }
+                    }
+                }
+                Ok(true)
+            }
+            Ok(false) => {
+                let mut file = tokio::fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(false)
+                    .open(&config_path)
+                    .await?;
+                {
+                    let lib_lock = self.library_config.lock().await;
+                    match lib_lock.as_ref() {
+                        Some(lib) => {
+                            let paths = lib.library_paths.as_ref().unwrap();
+                            let content = toml::to_string(paths).map_err(|e| {
+                                FileError::with_source(
+                        FileErrorKind::Io,
+                        format!("An error occurred while trying to parse toml at {config_path:#?}"),
+                        e,
+                        Some(vec![config_path.to_owned()]),
+                            )
+                            })?;
+                            file.write_all(content.as_bytes()).await?;
+                        }
+                        None => {
+                            return Err(FileError::new(
+                                FileErrorKind::InvalidConfigError,
+                                format!("Library Config not found"),
+                                None,
+                            ))
+                        }
+                    }
+                }
+                Ok(false)
+            }
+            Err(e) => Err(FileError::with_source(
+                FileErrorKind::Io,
+                format!("An error occurred while trying to look for {config_path:#?}"),
+                e,
+                Some(vec![config_path]),
+            )),
+        }
     }
 
     //TODO: There still needs to be a method to load from disk.
@@ -78,9 +166,9 @@ impl Library {
     }
 
     pub async fn switch_or_create_lib(
-        &mut self,
+        mut self,
         share_path: &std::path::PathBuf,
-    ) -> Result<(), FileError> {
+    ) -> Result<Library, FileError> {
         info!("Trying to validate data home directory:");
         println!("Trying to validate data home directory:");
         let datahome = Library::create_or_validate_data_directory().await?;
@@ -146,7 +234,7 @@ impl Library {
 
         self.share_path = Arc::new(Some(share_path.to_owned()));
         self.library_config = Arc::new(Mutex::new(Some(config_toml)));
-        Ok(())
+        Ok(self)
     }
 
     pub async fn delete(self) -> Result<(), FileError> {
@@ -182,12 +270,34 @@ impl Library {
 
     async fn open_or_create_config_file(share_path: &Path) -> Result<PathBuf, FileError> {
         let config_path = share_path.join("config.toml");
-        tokio::fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(false)
-            .open(&config_path)
-            .await?;
+        match tokio::fs::try_exists(&config_path).await {
+            Ok(true) => (),
+            Ok(false) => {
+                let mut file = tokio::fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(false)
+                    .open(&config_path)
+                    .await?;
+                let content = toml::to_string(&LibraryConfig::default()).map_err(|e| {
+                    FileError::with_source(
+                        FileErrorKind::Io,
+                        format!("An error occurred while trying to parse toml at {config_path:#?}"),
+                        e,
+                        Some(vec![config_path.to_owned()]),
+                    )
+                })?;
+                file.write_all(content.as_bytes()).await?;
+            }
+            Err(e) => {
+                return Err(FileError::with_source(
+                    FileErrorKind::Io,
+                    format!("An error occurred while trying to look for {config_path:#?}"),
+                    e,
+                    Some(vec![config_path]),
+                ))
+            }
+        }
         Ok(config_path)
     }
 
