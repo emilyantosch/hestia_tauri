@@ -6,6 +6,7 @@ mod config;
 mod database;
 mod errors;
 mod file_system;
+mod utils;
 use crate::AppError;
 use std::path::PathBuf;
 

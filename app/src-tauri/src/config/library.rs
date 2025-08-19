@@ -11,7 +11,7 @@ pub struct Library {
     pub library_config: Arc<Mutex<Option<LibraryConfig>>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct LibraryConfig {
     pub library_paths: Option<Vec<LibraryPathConfig>>,
 }
@@ -25,18 +25,26 @@ pub struct LibraryPathConfig {
 impl Default for LibraryPathConfig {
     fn default() -> Self {
         LibraryPathConfig {
-            name: Some(String::from("")),
-            path: Some(PathBuf::new()),
+            name: Some(String::from("Test")),
+            path: Some(PathBuf::new().join("/home/emmi/Downloads/")),
+        }
+    }
+}
+
+impl Default for LibraryConfig {
+    fn default() -> Self {
+        LibraryConfig {
+            library_paths: Some(vec![LibraryPathConfig::default()]),
         }
     }
 }
 
 impl Library {
-    pub async fn new() -> Result<Library, FileError> {
-        Ok(Library {
+    pub fn new() -> Library {
+        Library {
             share_path: Arc::new(None),
             library_config: Arc::new(Mutex::new(None)),
-        })
+        }
     }
 
     async fn create_or_validate_data_directory() -> Result<PathBuf, FileError> {
@@ -270,6 +278,15 @@ impl Library {
 
     async fn open_or_create_config_file(share_path: &Path) -> Result<PathBuf, FileError> {
         let config_path = share_path.join("config.toml");
+        let content = toml::to_string(&LibraryConfig::default()).map_err(|e| {
+            FileError::with_source(
+                FileErrorKind::Io,
+                format!("An error occurred while trying to parse toml at {config_path:#?}"),
+                e,
+                Some(vec![config_path.to_owned()]),
+            )
+        })?;
+        println!("{content:#?}");
         match tokio::fs::try_exists(&config_path).await {
             Ok(true) => (),
             Ok(false) => {
@@ -279,14 +296,6 @@ impl Library {
                     .truncate(false)
                     .open(&config_path)
                     .await?;
-                let content = toml::to_string(&LibraryConfig::default()).map_err(|e| {
-                    FileError::with_source(
-                        FileErrorKind::Io,
-                        format!("An error occurred while trying to parse toml at {config_path:#?}"),
-                        e,
-                        Some(vec![config_path.to_owned()]),
-                    )
-                })?;
                 file.write_all(content.as_bytes()).await?;
             }
             Err(e) => {
@@ -302,6 +311,7 @@ impl Library {
     }
 
     async fn open_or_create_database_file(share_path: &Path) -> Result<PathBuf, FileError> {
+        println!("Trying to open share path database");
         let db_path = share_path.join("db.sqlite");
         tokio::fs::OpenOptions::new()
             .create(true)

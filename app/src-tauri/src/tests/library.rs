@@ -7,12 +7,7 @@ async fn check_delete_library() {
 
     let mut path = dirs::data_dir().unwrap().to_path_buf();
     path.push("hestia/test_lib/");
-    let lib = Library::new()
-        .await
-        .unwrap()
-        .switch_or_create_lib(&path)
-        .await
-        .unwrap();
+    let lib = Library::new().switch_or_create_lib(&path).await.unwrap();
 
     let _ = lib.delete().await;
     assert!(tokio::fs::try_exists(path).await.is_ok_and(|v| !v));
@@ -24,20 +19,11 @@ async fn check_library_creation_successful() {
 
     let mut path = dirs::data_dir().unwrap().to_path_buf();
     path.push("hestia/test_lib/");
-    let lib = Library::new()
-        .await
-        .unwrap()
-        .switch_or_create_lib(&path)
-        .await
-        .unwrap();
+    let lib = Library::new().switch_or_create_lib(&path).await.unwrap();
     let lib_config = lib.library_config.clone();
     let lib_path = lib_config.lock().await;
     let lib_paths = &lib_path.as_ref().unwrap().library_paths;
-    println!("{lib_paths:#?}");
-
-    dbg!(&lib_paths);
-
-    assert!(lib_paths.is_none());
+    assert!(lib_paths.is_some());
     let _ = lib.delete().await;
 }
 
@@ -47,12 +33,7 @@ async fn check_library_default_values() {
 
     let mut path = dirs::data_dir().unwrap().to_path_buf();
     path.push("hestia/test_lib/");
-    let lib = Library::new()
-        .await
-        .unwrap()
-        .switch_or_create_lib(&path)
-        .await
-        .unwrap();
+    let lib = Library::new().switch_or_create_lib(&path).await.unwrap();
     {
         let lib_lock = lib.library_config.lock().await;
         let lib_config = lib_lock;
@@ -79,12 +60,7 @@ async fn check_library_write_save_and_retrieve() -> Result<(), FileError> {
         })?
         .join("hestia")
         .join("test_lib");
-    let lib = Library::new()
-        .await
-        .unwrap()
-        .switch_or_create_lib(&path)
-        .await
-        .unwrap();
+    let lib = Library::new().switch_or_create_lib(&path).await.unwrap();
     let lbc = vec![LibraryPathConfig::default(), LibraryPathConfig::default()];
     {
         let mut lib_lock = lib.library_config.lock().await;
@@ -101,12 +77,7 @@ async fn check_library_write_save_and_retrieve() -> Result<(), FileError> {
         };
     }
     let _ = lib.save_config().await;
-    let test_lib = Library::new()
-        .await
-        .unwrap()
-        .switch_or_create_lib(&path)
-        .await
-        .unwrap();
+    let test_lib = Library::new().switch_or_create_lib(&path).await.unwrap();
     {
         let lib_lock = test_lib.library_config.lock().await;
         match lib_lock.as_ref() {

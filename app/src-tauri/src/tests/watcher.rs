@@ -1,6 +1,6 @@
 use crate::errors::*;
 use crate::file_system::watcher::FileWatcher;
-use crate::file_system::FileId;
+use crate::file_system::{FileId, FileWatcherMessage};
 use notify::event::{CreateKind, ModifyKind, RemoveKind, RenameMode}; // Added RenameMode
 use notify::EventKind;
 use std::fs;
@@ -11,7 +11,10 @@ use tokio::time::Duration;
 
 // Helper function to create a FileWatcher instance for tests
 async fn create_test_watcher() -> FileWatcher {
-    let mut watcher = FileWatcher::new().await.expect("Failed to create watcher");
+    let (fw_sender, fw_receiver) = tokio::sync::mpsc::unbounded_channel::<FileWatcherMessage>();
+    let mut watcher = FileWatcher::new(fw_receiver)
+        .await
+        .expect("Failed to create watcher");
     watcher.init_watcher().await;
     watcher
 }

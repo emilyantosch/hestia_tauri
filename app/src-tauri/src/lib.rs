@@ -4,15 +4,18 @@ mod database;
 mod errors;
 mod file_system;
 mod tests;
+mod utils;
 
 use std::sync::Arc;
 
+use crate::config::library::Library;
 use crate::database::{DatabaseManager, FileOperations};
 use crate::errors::AppError;
-use crate::file_system::{DirectoryScanner, FileWatcher};
+use crate::file_system::{DirectoryScanner, FileWatcher, FileWatcherHandler, FileWatcherMessage};
 use std::path::PathBuf;
 use tauri::Manager;
 use tauri::WebviewWindowBuilder;
+use tokio::sync::mpsc::{self, UnboundedSender};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
@@ -70,9 +73,10 @@ pub struct App {
 }
 
 impl App {
-    pub async fn run(self) -> Result<(), AppError> {
+    pub async fn run(self) -> Result<FileWatcherHandler, AppError> {
         // Create shared file operations with database connection
         let file_operations = Arc::new(FileOperations::new(self.state.database.clone()));
+        let (fw_sender, fw_receiver) = mpsc::unbounded_channel();
 
         // Preload file type cache for better performance
         if let Err(e) = file_operations.preload_file_type_cache().await {
@@ -118,13 +122,22 @@ impl App {
 
         // === START FILE WATCHER ===
         info!("Starting real-time file watcher...");
-        let mut watcher = FileWatcher::new_with_database(file_operations.clone())
+        let watcher = FileWatcher::new_with_database(file_operations.clone(), fw_receiver)
             .await
             .unwrap();
-        watcher.init_watcher().await;
-
-        // Watch the test vault directory
-        watcher.watch(&watch_directory).await.unwrap();
+        tokio::spawn(async move {
+            match watcher.run().await {
+                Ok(()) => (),
+                Err(e) => {
+                    return Err(AppError::with_source(
+                        errors::AppErrorKind::FileError,
+                        format!("The watcher has failed due to an previous error!"),
+                        Some(Box::new(e)),
+                    ))
+                }
+            }
+            Ok(FileWatcherHandler { sender: fw_sender })
+        });
 
         debug!(
             "File watcher started! Monitoring: {}",
@@ -146,6 +159,7 @@ impl App {
 pub fn run() {
     // Initialize the async runtime for database operations
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+    let mut fw_handler: Option<FileWatcherHandler> = None;
 
     rt.block_on(async {
         // Initialize the app with database
@@ -154,12 +168,15 @@ pub fn run() {
                 info!("App initialized successfully with database connection");
 
                 // Start the file watching system in a background task
-                let app_clone = app.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = app_clone.run().await {
-                        error!("Error running file watcher: {:?}", e);
+                let handler = match app.run().await {
+                    Ok(handler) => {
+                        fw_handler = Some(handler);
+                        info!("The app has been initialized successfully!");
                     }
-                });
+                    Err(e) => {
+                        error!("Err(e) to initialize app: {:?}", e);
+                    }
+                };
             }
             Err(e) => {
                 error!("Failed to initialize app: {:?}", e);
@@ -170,9 +187,9 @@ pub fn run() {
     // tauri::Builder::default()
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
+        .setup(move |app| {
             // Initialize database manager
-            let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+            // let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
             let db_manager = rt
                 .block_on(async { DatabaseManager::new_sqlite_default().await })
                 .expect("Failed to initialize database manager");
@@ -184,6 +201,7 @@ pub fn run() {
             // Create file operations with database connection
             let file_operations = Arc::new(FileOperations::new(Arc::new(db_manager)));
             let file_scanner = Arc::new(DirectoryScanner::new(Arc::clone(&file_operations)));
+            let library = Library::new();
 
             // Preload file type cache for better performance
             rt.block_on(async {
@@ -195,6 +213,8 @@ pub fn run() {
             // Manage the file operations as application state
             app.manage(file_operations);
             app.manage(file_scanner);
+            app.manage(library);
+            app.manage(fw_handler);
 
             info!("FileOperations initialized and managed as application state");
 
