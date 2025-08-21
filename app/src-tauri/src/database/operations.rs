@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tracing::info;
 
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction,
@@ -193,9 +194,9 @@ impl FileOperations {
             .await?;
 
         // Get proper content and identity hashes from the FileHash struct
-        let content_hash_str = format!("{:?}", event.hash.content_hash);
-        let identity_hash_str = format!("{:?}", event.hash.identity_hash);
-        let structure_hash_str = format!("{:?}", event.hash.structure_hash);
+        let content_hash_str = format!("{:?}", event.hash.as_ref().unwrap().content_hash);
+        let identity_hash_str = format!("{:?}", event.hash.as_ref().unwrap().identity_hash);
+        let structure_hash_str = format!("{:?}", event.hash.as_ref().unwrap().structure_hash);
 
         // Get file system identifier
         let file_system_id = self
@@ -309,8 +310,8 @@ impl FileOperations {
             .await?;
 
         // Get proper content and identity hashes from the FileHash struct
-        let content_hash_str = format!("{:?}", event.hash.content_hash);
-        let identity_hash_str = format!("{:?}", event.hash.identity_hash);
+        let content_hash_str = format!("{:?}", event.hash.as_ref().unwrap().content_hash);
+        let identity_hash_str = format!("{:?}", event.hash.as_ref().unwrap().identity_hash);
 
         // Get file system identifier
         let file_system_id = self
@@ -383,6 +384,7 @@ impl FileOperations {
 
     /// Delete a file record from the database
     pub async fn delete_file_by_path(&self, file_path: &Path) -> Result<bool, DbError> {
+        info!("FileOperations: Deleting path {file_path:#?} from database");
         let path_str = file_path.to_string_lossy().to_string();
         let connection = self.database_manager.get_connection();
 

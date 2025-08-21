@@ -1,16 +1,60 @@
 use crate::config::library::{LibraryConfig, LibraryPathConfig};
-use crate::errors::{FileError, FileErrorKind};
+use crate::errors::{AppError, AppErrorKind, FileError, FileErrorKind};
+use tokio::sync::Notify;
 
 #[tokio::test]
-async fn check_delete_library() {
+async fn check_delete_library() -> Result<(), FileError> {
     use crate::config::library::Library;
+    use std::time::Instant;
+    use tracing::{error, info};
 
     let mut path = dirs::data_dir().unwrap().to_path_buf();
     path.push("hestia/test_lib/");
-    let lib = Library::new().switch_or_create_lib(&path).await.unwrap();
+    let lib = Library::new().switch_or_create_lib(&path).await?;
+    info!("Found or created library to be deleted!");
 
-    let _ = lib.delete().await;
-    assert!(tokio::fs::try_exists(path).await.is_ok_and(|v| !v));
+    //Assert that path exists
+    assert!(
+        tokio::fs::try_exists(&path).await?,
+        "Library Path should exist before deletion"
+    );
+
+    //Delete Library
+    if let Err(e) = lib.delete().await {
+        error!("The lib could not get deleted due to {e:#?}");
+    }
+    let now = Instant::now();
+    let timeout = std::time::Duration::from_secs(5);
+
+    loop {
+        match tokio::fs::try_exists(&path).await {
+            Ok(false) => {
+                info!("Library at {path:#?} deleted!");
+                break;
+            }
+            Ok(true) => {
+                if now.elapsed() > timeout {
+                    return Err(FileError::new(
+                        FileErrorKind::Io, 
+                        format!("Path still exists, deletion timed out while trying to delete library at {path:#?}"), 
+                        Some(vec![path])));
+                }
+                tokio::task::yield_now().await;
+            }
+            Err(e) => {
+                return Err(FileError::with_source(
+                    FileErrorKind::Io,
+                    "Problem while trying to check for path".to_string(),
+                    e,
+                    None,
+                ))
+            }
+        }
+    }
+
+    let is_deleted = tokio::fs::try_exists(path).await;
+    assert!(is_deleted.is_ok_and(|v| !v));
+    Ok(())
 }
 
 #[tokio::test]

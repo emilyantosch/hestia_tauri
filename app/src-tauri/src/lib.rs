@@ -11,7 +11,10 @@ use std::sync::Arc;
 use crate::config::library::Library;
 use crate::database::{DatabaseManager, FileOperations};
 use crate::errors::AppError;
-use crate::file_system::{DirectoryScanner, FileWatcher, FileWatcherHandler, FileWatcherMessage};
+use crate::file_system::{
+    DatabaseFileWatcherEventHandler, DirectoryScanner, FileWatcher, FileWatcherHandler,
+    FileWatcherMessage,
+};
 use std::path::PathBuf;
 use tauri::Manager;
 use tauri::WebviewWindowBuilder;
@@ -76,6 +79,9 @@ impl App {
     pub async fn run(self) -> Result<FileWatcherHandler, AppError> {
         // Create shared file operations with database connection
         let file_operations = Arc::new(FileOperations::new(self.state.database.clone()));
+        let fw_event_handler = Arc::new(DatabaseFileWatcherEventHandler {
+            db_operations: Some(file_operations.clone()),
+        });
         let (fw_sender, fw_receiver) = mpsc::unbounded_channel();
 
         // Preload file type cache for better performance
@@ -122,7 +128,7 @@ impl App {
 
         // === START FILE WATCHER ===
         info!("Starting real-time file watcher...");
-        let watcher = FileWatcher::new_with_database(file_operations.clone(), fw_receiver)
+        let watcher = FileWatcher::new_with_handler(fw_event_handler, fw_receiver)
             .await
             .unwrap();
         tokio::spawn(async move {
@@ -168,7 +174,7 @@ pub fn run() {
                 info!("App initialized successfully with database connection");
 
                 // Start the file watching system in a background task
-                let handler = match app.run().await {
+                match app.run().await {
                     Ok(handler) => {
                         fw_handler = Some(handler);
                         info!("The app has been initialized successfully!");

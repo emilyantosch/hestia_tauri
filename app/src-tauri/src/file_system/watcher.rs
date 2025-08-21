@@ -1,6 +1,7 @@
 use crate::database::FileOperations;
 use crate::errors::{AppError, AppErrorKind, DbError, FileError, FileErrorKind};
 use crate::file_system::{FileHash, FolderHash};
+use crate::utils;
 use crate::utils::canon_path::CanonPath;
 use notify::event::{CreateKind, EventKind, ModifyKind, RemoveKind, RenameMode};
 use notify::{Error, RecommendedWatcher, RecursiveMode};
@@ -11,9 +12,9 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc::{self, Receiver, Sender};
-use tokio::sync::Mutex;
-use tracing::{info, warn};
+use tokio::sync::mpsc::{self, Receiver, Sender, UnboundedSender};
+use tokio::sync::{oneshot, Mutex};
+use tracing::{error, info, warn};
 
 #[derive(Debug)]
 pub struct FSEvent {
@@ -39,12 +40,49 @@ impl From<FolderEvent> for FSEvent {
     }
 }
 
+#[async_trait::async_trait]
+pub trait FileWatcherEventHandler: Send + Sync {
+    async fn handle_event(&self, event: FSEvent) -> Result<(), AppError>;
+}
+
+pub struct DatabaseFileWatcherEventHandler {
+    pub db_operations: Option<Arc<FileOperations>>,
+}
+
+#[async_trait::async_trait]
+impl FileWatcherEventHandler for DatabaseFileWatcherEventHandler {
+    async fn handle_event(&self, event: FSEvent) -> Result<(), AppError> {
+        FileWatcher::to_database(event, &self.db_operations).await
+    }
+}
+
+#[cfg(test)]
+pub struct TestFileWatcherEventHandler {
+    pub sender: Arc<Mutex<UnboundedSender<FSEvent>>>,
+}
+
+#[cfg(test)]
+#[async_trait::async_trait]
+impl FileWatcherEventHandler for TestFileWatcherEventHandler {
+    async fn handle_event(&self, event: FSEvent) -> Result<(), AppError> {
+        info!("FileWatcher is sending event to test pipeline");
+        let sender = self.sender.lock().await;
+        sender.send(event).map_err(|e| {
+            AppError::with_source(
+                AppErrorKind::FileError,
+                format!("FSEvent {e:#?} could not be sent"),
+                Some(Box::new(e)),
+            )
+        })
+    }
+}
+
 #[derive(Debug)]
 pub struct FileEvent {
     pub event: DebouncedEvent,
     pub paths: Vec<PathBuf>,
     pub kind: EventKind,
-    pub hash: FileHash,
+    pub hash: Option<FileHash>,
 }
 
 #[derive(Debug)]
@@ -52,7 +90,7 @@ pub struct FolderEvent {
     pub event: DebouncedEvent,
     pub paths: Vec<PathBuf>,
     pub kind: EventKind,
-    pub hash: FolderHash,
+    pub hash: Option<FolderHash>,
 }
 
 type RawEventReceiver = Option<
@@ -66,13 +104,14 @@ pub struct FileWatcherHandler {
 pub enum FileWatcherMessage {
     WatchPath(CanonPath),
     UnwatchPath(CanonPath),
+    GetWatchPaths(oneshot::Sender<HashSet<CanonPath>>),
 }
 
 pub struct FileWatcher {
     watcher: Option<Debouncer<RecommendedWatcher, RecommendedCache>>,
-    db_operations: Option<Arc<FileOperations>>,
+    event_handler: Arc<dyn FileWatcherEventHandler>,
     pub message_receiver: mpsc::UnboundedReceiver<FileWatcherMessage>,
-    watched_paths: Option<HashSet<PathBuf>>,
+    watched_paths: Option<HashSet<CanonPath>>,
 }
 
 impl FileWatcher {
@@ -114,12 +153,11 @@ impl FileWatcher {
                 }
             }
         });
-        let db_ops_clone = self.db_operations.clone();
+        let event_handler = self.event_handler.clone();
 
         tokio::spawn(async move {
             while let Some(event) = p_rx.recv().await {
-                println!("Event received from processed sender!");
-                if let Err(e) = Self::to_database(event, &db_ops_clone).await {
+                if let Err(e) = event_handler.handle_event(event).await {
                     eprintln!("Failed to store event to database: {:?}", e);
                 }
             }
@@ -137,22 +175,23 @@ impl FileWatcher {
 
     pub async fn new(
         message_receiver: mpsc::UnboundedReceiver<FileWatcherMessage>,
+        event_handler: Arc<dyn FileWatcherEventHandler>,
     ) -> std::result::Result<FileWatcher, Box<dyn std::error::Error>> {
         Ok(Self {
             watcher: None,
-            db_operations: None,
+            event_handler,
             message_receiver,
             watched_paths: None,
         })
     }
 
-    pub async fn new_with_database(
-        db_operations: Arc<FileOperations>,
+    pub async fn new_with_handler(
+        event_handler: Arc<dyn FileWatcherEventHandler>,
         message_receiver: mpsc::UnboundedReceiver<FileWatcherMessage>,
     ) -> std::result::Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
             watcher: None,
-            db_operations: Some(db_operations),
+            event_handler,
             message_receiver,
             watched_paths: None,
         })
@@ -163,37 +202,44 @@ impl FileWatcher {
         while let Some(res) = self.message_receiver.recv().await {
             match res {
                 FileWatcherMessage::WatchPath(path) => {
-                    self.watch(path.try_into()?).await?;
+                    match self.watch(path).await {
+                        Ok(()) => info!("Path is being watched successfully"),
+                        Err(e) => error!("The path could not be watched due to: {e:#?}"),
+                    };
                 }
                 FileWatcherMessage::UnwatchPath(path) => {
-                    self.unwatch(path.try_into()?).await?;
+                    self.unwatch(path).await?;
                 }
+                FileWatcherMessage::GetWatchPaths(sender) => match self.watched_paths.as_ref() {
+                    Some(paths) => {
+                        sender.send(paths.to_owned());
+                    }
+                    None => (),
+                },
             }
         }
         Ok(())
     }
 
-    pub async fn unwatch(&mut self, path: PathBuf) -> Result<(), AppError> {
+    pub async fn unwatch(&mut self, path: CanonPath) -> Result<(), AppError> {
         match self.watched_paths.as_mut() {
             Some(paths) => {
                 if paths.remove(&path) {
                     return Ok(());
                 }
-                return Err(FileError::new(
+                Err(FileError::new(
                     FileErrorKind::WatchNotFoundError,
                     format!("The path {path:#?} is not being watched and cannot be unwatched"),
-                    Some(vec![path.to_owned()]),
+                    Some(vec![path.into()]),
                 )
-                .into());
+                .into())
             }
-            None => {
-                return Err(FileError::new(
-                    FileErrorKind::PathNotFoundError,
-                    format!("There is no path being watched, can't remove path from watch list."),
-                    None,
-                )
-                .into());
-            }
+            None => Err(FileError::new(
+                FileErrorKind::PathNotFoundError,
+                "There is no path being watched, can't remove path from watch list.".to_string(),
+                None,
+            )
+            .into()),
         }
     }
 
@@ -203,20 +249,20 @@ impl FileWatcher {
     //separately. This is true for each folder added to watcher, but also changes based on the
     //library that is currently being looked at. I assume we want to use different db files for
     //different vault configs.
-    pub async fn watch(&mut self, path: PathBuf) -> Result<(), AppError> {
+    pub async fn watch(&mut self, path: CanonPath) -> Result<(), AppError> {
         match path.try_exists() {
             Ok(true) => (),
             Ok(false) => {
-                let error_path = vec![path.to_path_buf()];
+                let error_path = vec![path.clone().into()];
                 return Err(FileError::new(
                     FileErrorKind::PathNotFoundError,
-                    format!("Path could not be found: {:?}", path),
+                    format!("Path could not be found: {path:?}"),
                     Some(error_path),
                 )
                 .into());
             }
             Err(e) => {
-                let error_path = vec![path.to_path_buf()];
+                let error_path = vec![path.clone().into()];
                 return Err(FileError::with_source(
                     FileErrorKind::PathNotFoundError,
                     format!("Path could not be found: {path:?}"),
@@ -228,13 +274,13 @@ impl FileWatcher {
         }
         if let Some(watcher) = self.watcher.as_mut() {
             watcher
-                .watch(&path, RecursiveMode::Recursive)
+                .watch(path.as_ref(), RecursiveMode::Recursive)
                 .map_err(|e| {
                     FileError::with_source(
                         FileErrorKind::WatchNotFoundError,
                         format!("Failed to watch directory: {:?}", e.to_string()),
                         e,
-                        Some(vec![path.to_owned()]),
+                        Some(vec![path.clone().into()]),
                     )
                 })?;
         }
@@ -286,6 +332,7 @@ impl FileWatcher {
                     EventKind::Remove(_) => {
                         // File was deleted, remove from database
                         for path in &file_event.paths {
+                            info!("File with path {path:#?} is getting removed from db");
                             match db_ops.delete_file_by_path(path).await {
                                 Ok(deleted) => {
                                     if deleted {
@@ -412,12 +459,20 @@ async fn to_file_or_folder_event_and_send(
         }
     };
 
-    if path.is_dir() {
-        to_folder_event_and_send(event, processed_event_tx).await?;
-    } else {
-        to_file_event_and_send(event, processed_event_tx).await?;
+    info!("Deciding handling based on event type for {event:#?}");
+    match (path.is_dir(), event.kind) {
+        (true, _)
+        | (false, EventKind::Create(CreateKind::Folder))
+        | (false, EventKind::Remove(RemoveKind::Folder)) => {
+            info!("{event:#?} is folder event");
+            to_folder_event_and_send(event, processed_event_tx).await?;
+        }
+        (_, EventKind::Access(_)) => return Ok(()),
+        (false, _) => {
+            info!("{event:#?} is file event");
+            to_file_event_and_send(event, processed_event_tx).await?;
+        }
     }
-
     Ok(())
 }
 
@@ -427,21 +482,26 @@ async fn to_file_event_and_send(
 ) -> Result<(), AppError> {
     let kind = event.kind;
     let paths = event.paths.to_owned();
-    println!("{:?}", paths);
-
-    let hash = FileHash::hash(match &paths.last() {
-        Some(x) => x,
-        None => {
-            return Err(AppError::Categorized {
+    let mut hash: Option<FileHash> = None;
+    info!("The following paths are involved in the file event: {paths:#?}");
+    info!("The event kind is {kind:#?}");
+    if kind != EventKind::Remove(RemoveKind::File) {
+        hash = Some(
+            FileHash::hash(match &paths.last() {
+                Some(x) => x,
+                None => {
+                    return Err(AppError::Categorized {
                 kind: AppErrorKind::FileError,
                 message: String::from(
                     "Error while trying to extract last path: There is no path to be extracted.",
                 ),
                 source: None,
             });
-        }
-    })
-    .await?;
+                }
+            })
+            .await?,
+        );
+    }
 
     let file_event = FileEvent::new(event, kind, paths, hash);
     println!("Constructed FileEvent from Raw Stream");
@@ -460,21 +520,26 @@ async fn to_folder_event_and_send(
 ) -> Result<(), AppError> {
     let kind = event.kind;
     let paths = event.paths.to_owned();
-    println!("{:?}", paths);
-
-    let hash = FolderHash::hash(match &paths.last() {
-        Some(x) => x,
-        None => {
-            return Err(AppError::Categorized {
+    let mut hash = None;
+    info!("The following paths are involved in the file event: {paths:#?}");
+    info!("The event kind is {kind:#?}");
+    if kind != EventKind::Remove(RemoveKind::Folder) {
+        hash = Some(
+            FolderHash::hash(match &paths.last() {
+                Some(x) => x,
+                None => {
+                    return Err(AppError::Categorized {
                 kind: AppErrorKind::FileError,
                 message: String::from(
                     "Error while trying to extract last path: There is no path to be extracted.",
                 ),
                 source: None,
             });
-        }
-    })
-    .await?;
+                }
+            })
+            .await?,
+        );
+    }
 
     let folder_event = FolderEvent::new(event, kind, paths, hash);
     println!("Constructed FileEvent from Raw Stream");
@@ -488,7 +553,12 @@ async fn to_folder_event_and_send(
 }
 
 impl FolderEvent {
-    fn new(event: DebouncedEvent, kind: EventKind, paths: Vec<PathBuf>, hash: FolderHash) -> Self {
+    fn new(
+        event: DebouncedEvent,
+        kind: EventKind,
+        paths: Vec<PathBuf>,
+        hash: Option<FolderHash>,
+    ) -> Self {
         FolderEvent {
             event,
             paths,
@@ -498,7 +568,12 @@ impl FolderEvent {
     }
 }
 impl FileEvent {
-    fn new(event: DebouncedEvent, kind: EventKind, paths: Vec<PathBuf>, hash: FileHash) -> Self {
+    fn new(
+        event: DebouncedEvent,
+        kind: EventKind,
+        paths: Vec<PathBuf>,
+        hash: Option<FileHash>,
+    ) -> Self {
         FileEvent {
             event,
             paths,

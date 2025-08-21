@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{fmt::write, fs::File, str::FromStr, sync::Arc};
+use thiserror::Error;
 use tokio::{io::AsyncWriteExt, sync::Mutex};
 use tracing::{error, info};
 
@@ -9,6 +10,33 @@ use std::path::{Path, PathBuf};
 pub struct Library {
     pub share_path: Arc<Option<std::path::PathBuf>>,
     pub library_config: Arc<Mutex<Option<LibraryConfig>>>,
+}
+
+#[derive(Debug, Error)]
+pub struct LibraryError {
+    kind: LibraryErrorKind,
+    message: String,
+    #[source]
+    source: Option<Box<dyn std::error::Error + Send + Sync + 'static>>,
+}
+
+impl std::fmt::Display for LibraryErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::fmt::Display for LibraryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[derive(Debug)]
+pub enum LibraryErrorKind {
+    CreationTimeout,
+    DeletionTimeout,
+    Io,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]

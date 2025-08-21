@@ -1,24 +1,31 @@
 use crate::errors::FileError;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CanonPath {
     path: PathBuf,
 }
 
-impl TryFrom<PathBuf> for CanonPath {
-    type Error = FileError;
-
-    fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
-        Ok(CanonPath {
-            path: std::fs::canonicalize(path)?,
-        })
+impl From<PathBuf> for CanonPath {
+    fn from(path: PathBuf) -> CanonPath {
+        CanonPath { path }
     }
 }
 
-impl TryInto<PathBuf> for CanonPath {
-    type Error = FileError;
+impl From<CanonPath> for PathBuf {
+    fn from(path: CanonPath) -> PathBuf {
+        path.path
+    }
+}
 
-    fn try_into(self) -> Result<PathBuf, Self::Error> {
-        Ok(self.path)
+impl AsRef<Path> for CanonPath {
+    fn as_ref(&self) -> &Path {
+        &self.path.as_path()
+    }
+}
+
+impl CanonPath {
+    pub fn try_exists(&self) -> Result<bool, FileError> {
+        Ok(self.path.try_exists()?)
     }
 }
