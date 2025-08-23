@@ -1,9 +1,9 @@
-use crate::config::library::{LibraryConfig, LibraryPathConfig};
-use crate::errors::{AppError, AppErrorKind, FileError, FileErrorKind};
+use crate::config::library::{LibraryConfig};
+use crate::errors::{AppError, AppErrorKind, FileError, FileErrorKind, LibraryError};
 use tokio::sync::Notify;
 
 #[tokio::test]
-async fn check_delete_library() -> Result<(), FileError> {
+async fn check_delete_library() -> Result<(), LibraryError> {
     use crate::config::library::Library;
     use std::time::Instant;
     use tracing::{error, info};
