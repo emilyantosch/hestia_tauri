@@ -1,6 +1,7 @@
 import * as React from "react";
 
-import { TeamSwitcher } from "@/components/team-switcher";
+import { LibrarySwitcher } from "@/components/library-switcher";
+import { WatchedFoldersTree } from "@/components/tree-sidebar-section";
 import {
   Sidebar,
   SidebarContent,
@@ -12,70 +13,56 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 import {
-  RiChat1Line,
-  RiBardLine,
-  RiMickeyLine,
-  RiMicLine,
-  RiCheckDoubleLine,
-  RiBracesLine,
+  RiFolderLine,
+  RiPriceTag3Line,
+  RiTimeLine,
   RiPlanetLine,
   RiSeedlingLine,
-  RiSettings3Line,
+  RiImageLine,
 } from "@remixicon/react";
 
 // This is sample data.
 const data = {
-  teams: [
+  libraries: [
     {
-      name: "ArkDigital",
+      name: "My Library",
       logo: "https://raw.githubusercontent.com/origin-space/origin-images/refs/heads/main/exp2/logo-01_upxvqe.png",
     },
     {
-      name: "Acme Corp.",
+      name: "Work Library",
       logo: "https://raw.githubusercontent.com/origin-space/origin-images/refs/heads/main/exp2/logo-01_upxvqe.png",
     },
     {
-      name: "Evil Corp.",
+      name: "Project Library",
       logo: "https://raw.githubusercontent.com/origin-space/origin-images/refs/heads/main/exp2/logo-01_upxvqe.png",
     },
   ],
   navMain: [
     {
-      title: "Playground",
+      title: "Quick Access",
       url: "#",
       items: [
         {
-          title: "Chat",
+          title: "All",
           url: "#",
-          icon: RiChat1Line,
+          icon: RiFolderLine,
           isActive: true,
         },
         {
-          title: "Real-time",
+          title: "Untagged",
           url: "#",
-          icon: RiBardLine,
+          icon: RiPriceTag3Line,
+          isActive: false,
         },
         {
-          title: "Assistants",
+          title: "Recent",
           url: "#",
-          icon: RiMickeyLine,
-        },
-        {
-          title: "Audio",
-          url: "#",
-          icon: RiMicLine,
-        },
-        {
-          title: "Metrics",
-          url: "#",
-          icon: RiCheckDoubleLine,
-        },
-        {
-          title: "Documentation",
-          url: "#",
-          icon: RiBracesLine,
+          icon: RiTimeLine,
+          isActive: false,
         },
       ],
     },
@@ -87,16 +74,19 @@ const data = {
           title: "Community",
           url: "#",
           icon: RiPlanetLine,
+          isActive: false,
         },
         {
           title: "Help Centre",
           url: "#",
           icon: RiSeedlingLine,
+          isActive: false,
         },
         {
           title: "Settings",
           url: "#",
-          icon: RiSettings3Line,
+          icon: RiImageLine,
+          isActive: false,
         },
       ],
     },
@@ -105,12 +95,25 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
-    <Sidebar {...props} className="dark !border-none">
+    <Sidebar {...props} className="!border-none">
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <LibrarySwitcher libraries={data.libraries} />
+          </div>
+          <SidebarTrigger className="h-8 w-8" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+          >
+            <RiImageLine size={18} aria-hidden="true" />
+            <span className="sr-only">Thumbnail</span>
+          </Button>
+        </div>
       </SidebarHeader>
       <SidebarContent>
-        {/* We only show the first parent group */}
+        {/* Quick Access Section */}
         <SidebarGroup>
           <SidebarGroupLabel className="uppercase text-sidebar-foreground/50">
             {data.navMain[0]?.title}
@@ -127,51 +130,31 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <a href={item.url}>
                       {item.icon && (
                         <item.icon
-                          className="text-sidebar-foreground/50 group-data-[active=true]/menu-button:text-sidebar-foreground"
+                          className="text-sidebar-foreground/50 group-data-[active=true]/menu-button:text-white"
                           size={22}
                           aria-hidden="true"
                         />
                       )}
-                      <span>{item.title}</span>
+                      <span className="group-data-[active=true]/menu-button:text-white">{item.title}</span>
                     </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        
+        {/* Watched Folders Section */}
+        <SidebarGroup className="mt-4">
+          <SidebarGroupLabel className="uppercase text-sidebar-foreground/50">
+            Watched Folders
+          </SidebarGroupLabel>
+          <SidebarGroupContent className="px-2">
+            <WatchedFoldersTree />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        {/* Secondary Navigation */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="uppercase text-sidebar-foreground/50">
-            {data.navMain[1]?.title}
-          </SidebarGroupLabel>
-          <SidebarGroupContent className="px-2">
-            <SidebarMenu>
-              {data.navMain[1]?.items.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    className="group/menu-button font-medium gap-3 h-9 rounded-md [&>svg]:size-auto"
-                    isActive={item.isActive}
-                  >
-                    <a href={item.url}>
-                      {item.icon && (
-                        <item.icon
-                          className="text-sidebar-foreground/50 group-data-[active=true]/menu-button:text-primary"
-                          size={22}
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span>{item.title}</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarFooter>
     </Sidebar>
   );

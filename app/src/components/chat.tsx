@@ -1,6 +1,6 @@
 "use client";
 
-import { SettingsPanelTrigger } from "@/components/settings-panel";
+import { InspectorPanelTrigger } from "@/components/inspector-panel";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -31,10 +31,10 @@ export default function Chat() {
   }, []);
 
   return (
-    <ScrollArea className="flex-1 [&>div>div]:h-full w-full shadow-md md:rounded-s-[inherit] min-[1024px]:rounded-e-3xl bg-background">
+    <ScrollArea className="flex-1 [&>div>div]:h-full w-full shadow-2xl md:rounded-s-[inherit] min-[1024px]:rounded-e-3xl bg-background">
       <div className="h-full flex flex-col px-4 md:px-6 lg:px-8">
         {/* Header */}
-        <div className="py-5 bg-background sticky top-0 z-10 before:absolute before:inset-x-0 before:bottom-0 before:h-px before:bg-gradient-to-r before:from-black/[0.06] before:via-black/10 before:to-black/[0.06]">
+        <div className="py-5 bg-background sticky top-0 z-10 before:absolute before:inset-x-0 before:bottom-0 before:h-px before:bg-gradient-to-r before:from-border/50 before:via-border before:to-border/50">
           <div className="flex items-center justify-between gap-2">
             <Breadcrumb>
               <BreadcrumbList className="sm:gap-1.5">
@@ -72,7 +72,7 @@ export default function Chat() {
                 />
                 <span className="max-sm:sr-only">Export</span>
               </Button>
-              <SettingsPanelTrigger />
+              <InspectorPanelTrigger />
             </div>
           </div>
         </div>
@@ -80,7 +80,7 @@ export default function Chat() {
         <div className="relative grow">
           <div className="max-w-3xl mx-auto mt-6 space-y-6">
             <div className="text-center my-8">
-              <div className="inline-flex items-center bg-white rounded-full border border-black/[0.08] shadow-xs text-xs font-medium py-1 px-3 text-foreground/80">
+              <div className="inline-flex items-center bg-background rounded-full border border-border shadow-xs text-xs font-medium py-1 px-3 text-foreground/80">
                 <RiShining2Line
                   className="me-1.5 text-muted-foreground/70 -ms-1"
                   size={14}

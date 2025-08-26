@@ -28,7 +28,7 @@ export function ChatMessage({ isUser, children }: ChatMessageProps) {
       <img
         className={cn(
           "rounded-full",
-          isUser ? "order-1" : "border border-black/[0.08] shadow-sm",
+          isUser ? "order-1" : "border border-border shadow-sm",
         )}
         src={
           isUser
@@ -66,7 +66,7 @@ function ActionButton({ icon, label }: ActionButtonProps) {
           <span className="sr-only">{label}</span>
         </button>
       </TooltipTrigger>
-      <TooltipContent side="bottom" className="dark px-2 py-1 text-xs">
+      <TooltipContent side="bottom" className="px-2 py-1 text-xs">
         <p>{label}</p>
       </TooltipContent>
     </Tooltip>
@@ -75,7 +75,7 @@ function ActionButton({ icon, label }: ActionButtonProps) {
 
 function MessageActions() {
   return (
-    <div className="relative inline-flex bg-white rounded-md border border-black/[0.08] shadow-sm -space-x-px">
+    <div className="relative inline-flex bg-background rounded-md border border-border shadow-sm -space-x-px">
       <TooltipProvider delayDuration={0}>
         <ActionButton icon={<RiCodeSSlashLine size={16} />} label="Show code" />
         <ActionButton icon={<RiBookLine size={16} />} label="Bookmark" />

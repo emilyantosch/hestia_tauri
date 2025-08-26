@@ -240,7 +240,7 @@ const SettingsPanel = () => {
   if (isMobile) {
     return (
       <Sheet open={openMobile} onOpenChange={setOpenMobile}>
-        <SheetContent className="w-72 px-4 md:px-6 py-0 bg-[hsl(240_5%_92.16%)] [&>button]:hidden">
+        <SheetContent className="w-72 px-4 md:px-6 py-0 bg-muted [&>button]:hidden">
           <SheetTitle className="hidden">Settings</SheetTitle>
           <div className="flex h-full w-full flex-col">
             <SettingsPanelContent />
@@ -251,8 +251,8 @@ const SettingsPanel = () => {
   }
 
   return (
-    <ScrollArea>
-      <div className="w-[300px] px-4 md:px-6">
+    <ScrollArea className="bg-muted">
+      <div className="w-[300px] px-4 md:px-6 bg-muted">
         <SettingsPanelContent />
       </div>
     </ScrollArea>
