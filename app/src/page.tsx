@@ -1,6 +1,3 @@
-import "./App.css";
-import { Check } from "lucide-react";
-
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,
@@ -14,26 +11,11 @@ import {
 } from "@/components/settings-panel";
 import Chat from "@/components/chat";
 
-import { ComboBox, ComboBoxEntry } from "./components/molecules/combobox";
-import Layout from "./Layout";
-import FolderSidebar from "./components/comp-574";
-import { invoke } from '@tauri-apps/api/core';
-
-const test_entry: ComboBoxEntry[] = [
-  {
-    value: "test",
-    logo: Check,
-    label: "test",
-  },
-];
-function App() {
-  let folder_tree = invoke('get_folder_tree')
-    .then((msg) => console.log(msg))
-    .catch((e) => console.log(e))
-    .finally(() => console.log("Invoke concluded"));
+export default function Page() {
   return (
-    <div>
-      <Layout>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset className="bg-sidebar group/sidebar-inset">
         <header className="dark flex h-16 shrink-0 items-center gap-2 px-4 md:px-6 lg:px-8 bg-sidebar text-sidebar-foreground relative before:absolute before:inset-y-3 before:-left-px before:w-px before:bg-gradient-to-b before:from-white/5 before:via-white/15 before:to-white/5 before:z-50">
           <SidebarTrigger className="-ms-2" />
           <div className="flex items-center gap-8 ml-auto">
@@ -73,9 +55,7 @@ function App() {
             <SettingsPanel />
           </div>
         </SettingsPanelProvider>
-      </Layout>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
-
-export default App;
