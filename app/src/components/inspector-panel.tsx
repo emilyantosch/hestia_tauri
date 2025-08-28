@@ -78,9 +78,9 @@ const PriceTag = ({
       <div className="relative inline-flex justify-start items-center h-8">
         {/* Rectangular background that scales with text */}
         <div
-          className="h-full border-1 rounded-xl flex justify-start items-center"
+          className="h-full border-1 rounded-xl flex justify-start items-center tracking-wide transition duration-100 hover:scale-105 cursor-pointer"
           style={{
-            backgroundColor: `${color}20`, // 50% opacity
+            backgroundColor: `${color}10`, // 50% opacity
             borderColor: color
           }}
         >
@@ -89,10 +89,10 @@ const PriceTag = ({
             style={{
               color: color,
             }}>
-            <div className="mx-1">
+            <div className="pl-2 mr-1">
               <Icon></Icon>
             </div>
-            <div>
+            <div className='ml-1 pr-2'>
               {children}
             </div>
           </div>
@@ -144,7 +144,7 @@ const InspectorPanelContent = () => {
         tags: [
           { name: "Travel", color: "#3B82F6", icon: LucideMap }, // blue
           { name: "Photography", color: "#10B981", icon: LucideCamera }, // green
-          { name: "Nature", color: "#F59E0B", icon: LucideTreePine } // amber
+          { name: "Nature", color: "#D57E0B", icon: LucideTreePine } // amber
         ]
       });
     }, 2000);
