@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.hestia.app",
   "build": {
-    "beforeDevCommand": "bun run dev",
+    "beforeDevCommand": "deno task dev",
+    "beforeBuildCommand": "deno task build",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },
   "app": {

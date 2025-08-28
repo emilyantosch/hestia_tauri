@@ -4,6 +4,7 @@
 pkgs.mkShell {
   nativeBuildInputs = with pkgs; [
     sea-orm-cli
+    gobject-introspection
     rustc
     rustfmt
     clippy
@@ -25,6 +26,20 @@ pkgs.mkShell {
     nodejs
     bun
     deno
+  ];
+  buildInputs = with pkgs; [
+    at-spi2-atk
+    atkmm
+    cairo
+    gdk-pixbuf
+    glib
+    gtk3
+    harfbuzz
+    librsvg
+    libsoup_3
+    pango
+    webkitgtk_4_1
+    openssl
   ];
   PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
   RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";

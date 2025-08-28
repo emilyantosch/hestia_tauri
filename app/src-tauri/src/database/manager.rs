@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use sea_orm::{Database, DatabaseConnection, ConnectOptions, ConnectionTrait};
+use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
 
 use crate::config::database::{DatabaseSettings, DatabaseType};
 use crate::errors::{DbError, DbErrorKind};
@@ -53,14 +53,13 @@ impl DatabaseManager {
             "SELECT 1".to_string(),
         ) {
             statement => {
-                self.connection
-                    .execute(statement)
-                    .await
-                    .map_err(|e| DbError::with_source(
+                self.connection.execute(statement).await.map_err(|e| {
+                    DbError::with_source(
                         DbErrorKind::ConnectionError,
                         "Failed to test database connection".to_string(),
                         e,
-                    ))?;
+                    )
+                })?;
             }
         }
         Ok(())
@@ -81,9 +80,11 @@ impl DatabaseManager {
             DatabaseType::Sqlite => {
                 if let Some(sqlite_config) = &settings.sqlite_config {
                     options
-                        .connect_timeout(Duration::from_millis(sqlite_config.connection_timeout_ms as u64))
+                        .connect_timeout(Duration::from_millis(
+                            sqlite_config.connection_timeout_ms as u64,
+                        ))
                         .sqlx_logging(false); // Disable sqlx logging for production
-                    
+
                     // SQLite-specific settings are handled via the connection string
                 }
             }
@@ -92,8 +93,12 @@ impl DatabaseManager {
                     options
                         .max_connections(postgres_config.max_connections)
                         .min_connections(postgres_config.min_connections)
-                        .connect_timeout(Duration::from_millis(postgres_config.connection_timeout_ms as u64))
-                        .acquire_timeout(Duration::from_millis(postgres_config.acquire_timeout_ms as u64))
+                        .connect_timeout(Duration::from_millis(
+                            postgres_config.connection_timeout_ms as u64,
+                        ))
+                        .acquire_timeout(Duration::from_millis(
+                            postgres_config.acquire_timeout_ms as u64,
+                        ))
                         .sqlx_logging(false); // Disable sqlx logging for production
 
                     if let Some(idle_timeout) = postgres_config.idle_timeout_ms {

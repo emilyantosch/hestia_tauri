@@ -19,7 +19,7 @@
     "npm:@tailwindcss/vite@^4.0.17": "4.1.12_vite@6.3.5__@types+node@22.18.0__picomatch@4.0.3_@types+node@22.18.0",
     "npm:@tauri-apps/api@2": "2.8.0",
     "npm:@tauri-apps/cli@2": "2.8.3",
-    "npm:@tauri-apps/plugin-opener@2": "2.5.0",
+    "npm:@tauri-apps/plugin-opener@2.5": "2.5.0",
     "npm:@types/node@^22.13.14": "22.18.0",
     "npm:@types/react-dom@^18.3.1": "18.3.7_@types+react@18.3.24",
     "npm:@types/react@^18.3.1": "18.3.24",
@@ -32,6 +32,7 @@
     "npm:polished@^4.3.1": "4.3.1",
     "npm:radix-ui@^1.4.2": "1.4.3_@types+react@18.3.24_@types+react-dom@18.3.7__@types+react@18.3.24_react@18.3.1_react-dom@18.3.1__react@18.3.1",
     "npm:react-dom@^18.3.1": "18.3.1_react@18.3.1",
+    "npm:react-masonry-css@^1.0.16": "1.0.16_react@18.3.1",
     "npm:react@^18.3.1": "18.3.1",
     "npm:tailwind-merge@^3.0.2": "3.3.1",
     "npm:tailwindcss@^4.0.17": "4.1.12",
@@ -2196,6 +2197,12 @@
         "scheduler"
       ]
     },
+    "react-masonry-css@1.0.16_react@18.3.1": {
+      "integrity": "sha512-KSW0hR2VQmltt/qAa3eXOctQDyOu7+ZBevtKgpNDSzT7k5LA/0XntNa9z9HKCdz3QlxmJHglTZ18e4sX4V8zZQ==",
+      "dependencies": [
+        "react"
+      ]
+    },
     "react-refresh@0.17.0": {
       "integrity": "sha512-z6F7K9bV85EfseRCp2bzrpyQ0Gkw1uLoCel9XBVWPg/TjRj94SkJzUTGfOa4bs7iJvBWtQG0Wq7wnI0syw3EBQ=="
     },
@@ -2412,7 +2419,7 @@
         "npm:@tailwindcss/vite@^4.0.17",
         "npm:@tauri-apps/api@2",
         "npm:@tauri-apps/cli@2",
-        "npm:@tauri-apps/plugin-opener@2",
+        "npm:@tauri-apps/plugin-opener@2.5",
         "npm:@types/node@^22.13.14",
         "npm:@types/react-dom@^18.3.1",
         "npm:@types/react@^18.3.1",
@@ -2425,6 +2432,7 @@
         "npm:polished@^4.3.1",
         "npm:radix-ui@^1.4.2",
         "npm:react-dom@^18.3.1",
+        "npm:react-masonry-css@^1.0.16",
         "npm:react@^18.3.1",
         "npm:tailwind-merge@^3.0.2",
         "npm:tailwindcss@^4.0.17",

@@ -16,6 +16,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   RiFolderLine,
   RiPriceTag3Line,
@@ -23,6 +24,11 @@ import {
   RiPlanetLine,
   RiSeedlingLine,
   RiImageLine,
+  RiSettings3Line,
+  RiAddLine,
+  RiFilter3Line,
+  RiStarLine,
+  RiSearchLine,
 } from "@remixicon/react";
 
 // This is sample data.
@@ -91,9 +97,40 @@ const data = {
       ],
     },
   ],
+  smartFolders: [
+    {
+      title: "Recent Photos",
+      url: "#",
+      icon: RiImageLine,
+      filter: "type:image AND modified:last7days",
+    },
+    {
+      title: "Large Files",
+      url: "#",
+      icon: RiFilter3Line,
+      filter: "size:>100MB",
+    },
+    {
+      title: "Favorites",
+      url: "#",
+      icon: RiStarLine,
+      filter: "tags:favorite",
+    },
+  ],
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const [folderFilter, setFolderFilter] = React.useState("");
+
+  // Filter folders based on search
+  const filteredQuickAccess = data.navMain[0]?.items.filter((item) =>
+    item.title.toLowerCase().includes(folderFilter.toLowerCase())
+  ) || [];
+
+  const filteredSmartFolders = data.smartFolders.filter((folder) =>
+    folder.title.toLowerCase().includes(folderFilter.toLowerCase())
+  );
+
   return (
     <Sidebar {...props} className="!border-none">
       <SidebarHeader>
@@ -101,14 +138,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <div className="flex-1">
             <LibrarySwitcher libraries={data.libraries} />
           </div>
-          <SidebarTrigger className="h-8 w-8" />
+          <SidebarTrigger className="h-6 w-6" />
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+            className="h-6 w-6 text-sidebar-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent"
           >
-            <RiImageLine size={18} aria-hidden="true" />
-            <span className="sr-only">Thumbnail</span>
+            <RiSettings3Line size={18} aria-hidden="true" />
+            <span className="sr-only">Settings</span>
           </Button>
         </div>
       </SidebarHeader>
@@ -120,7 +157,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroupLabel>
           <SidebarGroupContent className="px-2">
             <SidebarMenu>
-              {data.navMain[0]?.items.map((item) => (
+              {filteredQuickAccess.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
@@ -143,18 +180,72 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        
+
+        {/* Smart Folders Section */}
+        <SidebarGroup className="mt-4">
+          <div className="flex items-center justify-between px-2">
+            <SidebarGroupLabel className="uppercase text-sidebar-foreground/50">
+              Smart Folders
+            </SidebarGroupLabel>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+            >
+              <RiAddLine size={14} aria-hidden="true" />
+              <span className="sr-only">Add Smart Folder</span>
+            </Button>
+          </div>
+          <SidebarGroupContent className="px-2">
+            <SidebarMenu>
+              {filteredSmartFolders.map((folder) => (
+                <SidebarMenuItem key={folder.title}>
+                  <SidebarMenuButton
+                    asChild
+                    className="group/menu-button font-medium gap-3 h-9 rounded-md hover:bg-sidebar-accent/50 [&>svg]:size-auto"
+                  >
+                    <a href={folder.url} title={folder.filter}>
+                      {folder.icon && (
+                        <folder.icon
+                          className="text-sidebar-foreground/50"
+                          size={22}
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span>{folder.title}</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         {/* Watched Folders Section */}
         <SidebarGroup className="mt-4">
           <SidebarGroupLabel className="uppercase text-sidebar-foreground/50">
-            Watched Folders
+            Folders
           </SidebarGroupLabel>
           <SidebarGroupContent className="px-2">
             <WatchedFoldersTree />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="p-2">
+        <div className="relative">
+          <RiFilter3Line
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-sidebar-foreground"
+            size={16}
+            aria-hidden="true"
+          />
+          <Input
+            type="text"
+            placeholder="Filter"
+            value={folderFilter}
+            onChange={(e) => setFolderFilter(e.target.value)}
+            className="pl-10 h-8 bg-sidebar-accent/30 border-border/80 text-sidebar-foreground placeholder:text-sidebar-foreground/50 focus:bg-sidebar-accent/50 focus:border-border/80"
+          />
+        </div>
       </SidebarFooter>
     </Sidebar>
   );

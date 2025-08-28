@@ -7,6 +7,7 @@ mod tests;
 mod utils;
 
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::config::library::Library;
 use crate::database::{DatabaseManager, FileOperations};
@@ -17,7 +18,6 @@ use crate::file_system::{
 };
 use std::path::PathBuf;
 use tauri::Manager;
-use tauri::WebviewWindowBuilder;
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::fmt;
@@ -142,22 +142,11 @@ impl App {
                     ))
                 }
             }
-            Ok(FileWatcherHandler { sender: fw_sender })
+            Ok(())
         });
 
-        debug!(
-            "File watcher started! Monitoring: {}",
-            watch_directory.display()
-        );
-        info!("Application is now running. Press Ctrl+C to stop.");
-
+        Ok(FileWatcherHandler { sender: fw_sender })
         // Keep the application running
-        loop {
-            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-
-            // Optional: Periodic status report
-            // You could add periodic re-scans here if needed
-        }
     }
 }
 
@@ -190,12 +179,12 @@ pub fn run() {
         }
     });
 
-    // tauri::Builder::default()
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
             // Initialize database manager
-            // let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+            info!("Hello!");
+            println!("Hello!");
+            let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
             let db_manager = rt
                 .block_on(async { DatabaseManager::new_sqlite_default().await })
                 .expect("Failed to initialize database manager");
@@ -226,6 +215,7 @@ pub fn run() {
 
             Ok(())
         })
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             // File operations
             commands::file_operations::scan_directory,

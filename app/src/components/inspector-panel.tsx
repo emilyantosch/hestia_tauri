@@ -4,6 +4,7 @@ import { RiImageLine, RiFileTextLine, RiAddLine, RiCloseLine } from "@remixicon/
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetTitle, SheetContent } from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
 import * as React from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { LucideAArrowDown, LucideCamera, LucideIcon, LucideMap, LucideTreePine } from 'lucide-react';
@@ -126,12 +127,20 @@ const InspectorPanelContent = () => {
     thumbnail?: string;
     size: string;
     modified: string;
+    description?: string;
+    url?: string;
     tags: { name: string; color: string; icon: LucideIcon }[];
   } | null>(null);
+
+  // State for editable fields
+  const [editableName, setEditableName] = React.useState("");
+  const [editableDescription, setEditableDescription] = React.useState("");
+  const [editableUrl, setEditableUrl] = React.useState("");
 
   // State for tag input
   const [newTag, setNewTag] = React.useState("");
   const [isAddingTag, setIsAddingTag] = React.useState(false);
+  const [animatingTags, setAnimatingTags] = React.useState<Set<string>>(new Set());
 
   // Mock file for demonstration - remove this when connecting to real state
   React.useEffect(() => {
@@ -143,6 +152,8 @@ const InspectorPanelContent = () => {
         thumbnail: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400&h=300&fit=crop",
         size: "2.4 MB",
         modified: "2 hours ago",
+        description: "A beautiful landscape photo from our summer vacation in the mountains. This captures the peaceful moment at sunset overlooking the valley.",
+        url: "https://example.com/photos/vacation-photo.jpg",
         tags: [
           { name: "Travel", color: "#3B82F6", icon: LucideMap }, // blue
           { name: "Photography", color: "#10B981", icon: LucideCamera }, // green
@@ -153,6 +164,24 @@ const InspectorPanelContent = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  // Sync editable fields when file changes
+  React.useEffect(() => {
+    if (selectedFile) {
+      setEditableName(selectedFile.name);
+      setEditableDescription(selectedFile.description || "");
+      setEditableUrl(selectedFile.url || "");
+    }
+  }, [selectedFile]);
+
+  // Auto-resize textarea when description changes
+  React.useEffect(() => {
+    const textarea = document.querySelector('textarea[placeholder="Add a description..."]') as HTMLTextAreaElement;
+    if (textarea && editableDescription) {
+      textarea.style.height = 'auto';
+      textarea.style.height = textarea.scrollHeight + 'px';
+    }
+  }, [editableDescription]);
+
   // Available colors for new tags
   const tagColors = [
     "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6",
@@ -162,12 +191,28 @@ const InspectorPanelContent = () => {
   // Tag management functions
   const addTag = (icon: LucideIcon) => {
     if (newTag.trim() && selectedFile && !selectedFile.tags.some(tag => tag.name === newTag.trim())) {
+      const tagName = newTag.trim();
       // Assign a random color for new tags
       const randomColor = tagColors[Math.floor(Math.random() * tagColors.length)];
+
+      // Add tag to file
       setSelectedFile({
         ...selectedFile,
-        tags: [...selectedFile.tags, { name: newTag.trim(), color: randomColor, icon: icon }]
+        tags: [...selectedFile.tags, { name: tagName, color: randomColor, icon: icon }]
       });
+
+      // Add tag to animating set
+      setAnimatingTags(prev => new Set(prev).add(tagName));
+
+      // Remove from animating set after animation completes
+      setTimeout(() => {
+        setAnimatingTags(prev => {
+          const next = new Set(prev);
+          next.delete(tagName);
+          return next;
+        });
+      }, 100);
+
       setNewTag("");
       setIsAddingTag(false);
     }
@@ -206,13 +251,13 @@ const InspectorPanelContent = () => {
     return (
       <div className="flex flex-col h-full">
         {/* Thumbnail container */}
-        <div className="flex-1 p-4">
-          <div className="w-full h-full min-h-[300px] bg-background rounded-lg border border-border/50 overflow-hidden flex items-center justify-center">
+        <div className="p-4">
+          <div className="w-full h-48 bg-background rounded-lg border border-border/50 overflow-hidden flex items-center justify-center">
             {selectedFile.thumbnail ? (
               <img
                 src={selectedFile.thumbnail}
                 alt={selectedFile.name}
-                className="max-w-full max-h-full object-contain"
+                className="w-full h-full object-cover"
               />
             ) : (
               <div className="flex flex-col items-center justify-center text-muted-foreground/50">
@@ -227,19 +272,53 @@ const InspectorPanelContent = () => {
         <div className="border-t border-border/50" />
 
         {/* File info below thumbnail */}
-        <div className="py-4 px-4">
-          <div className="flex items-center gap-2 mb-2">
-            <RiImageLine
-              className="text-muted-foreground/70"
-              size={16}
-              aria-hidden="true"
+        <div className="py-4 px-4 space-y-4">
+          {/* File Name */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground/70 mb-1 block">
+              File Name
+            </label>
+            <Input
+              value={editableName}
+              onChange={(e) => setEditableName(e.target.value)}
+              className="h-8 text-sm"
+              placeholder="Enter file name"
             />
-            <h2 className="text-sm font-medium truncate">{selectedFile.name}</h2>
           </div>
-          <div className="text-xs text-muted-foreground/70 space-y-1">
-            <div>{selectedFile.size}</div>
-            <div>Modified {selectedFile.modified}</div>
+
+          {/* Description */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground/70 mb-1 block">
+              Description
+            </label>
+            <Textarea
+              value={editableDescription}
+              onChange={(e) => {
+                setEditableDescription(e.target.value);
+                // Auto-resize textarea to fit content
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+              }}
+              className="text-sm resize-none overflow-hidden"
+              placeholder="Add a description..."
+              rows={1}
+              style={{ height: 'auto' }}
+            />
           </div>
+
+          {/* URL */}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground/70 mb-1 block">
+              URL
+            </label>
+            <Input
+              value={editableUrl}
+              onChange={(e) => setEditableUrl(e.target.value)}
+              className="h-8 text-sm"
+              placeholder="https://example.com"
+            />
+          </div>
+
         </div>
 
         {/* Separator */}
@@ -286,18 +365,43 @@ const InspectorPanelContent = () => {
           {/* Tags list */}
           <div className="flex flex-wrap gap-3">
             {selectedFile.tags.map((tag) => (
-              <PriceTag
+              <div
                 key={tag.name}
-                color={tag.color}
-                icon={tag.icon}
-                onRemove={() => removeTag(tag.name)}
+                className={`${animatingTags.has(tag.name)
+                    ? 'animate-scale-in'
+                    : ''
+                  }`}
               >
-                {tag.name}
-              </PriceTag>
+                <PriceTag
+                  color={tag.color}
+                  icon={tag.icon}
+                  onRemove={() => removeTag(tag.name)}
+                >
+                  {tag.name}
+                </PriceTag>
+              </div>
             ))}
             {selectedFile.tags.length === 0 && !isAddingTag && (
               <p className="text-xs text-muted-foreground/70">No tags added</p>
             )}
+          </div>
+        </div>
+
+        {/* Separator */}
+        <div className="border-t border-border/50" />
+
+        {/* File Metadata Section */}
+        <div className="py-4 px-4">
+          <h3 className="text-sm font-medium mb-3">File Information</h3>
+          <div className="text-xs text-muted-foreground/70 space-y-2">
+            <div className="flex justify-between">
+              <span>Size:</span>
+              <span>{selectedFile.size}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Modified:</span>
+              <span>{selectedFile.modified}</span>
+            </div>
           </div>
         </div>
       </div>

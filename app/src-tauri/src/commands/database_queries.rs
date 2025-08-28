@@ -516,4 +516,3 @@ pub async fn get_recently_updated_files(
         Err(e) => Err(format!("Failed to get recently updated files: {}", e)),
     }
 }
-
