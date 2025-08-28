@@ -1,14 +1,12 @@
 "use client";
-import { lighten } from 'polished';
 import { useIsMobile } from "@/hooks/use-mobile";
 import { RiImageLine, RiFileTextLine, RiAddLine, RiCloseLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetTitle, SheetContent } from "@/components/ui/sheet";
 import * as React from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Icon, IconNode, LucideAArrowDown, LucideAArrowUp, LucideCamera, LucideIceCreamCone, LucideIcon, LucideMap, LucideTreePine } from 'lucide-react';
+import { LucideAArrowDown, LucideCamera, LucideIcon, LucideMap, LucideTreePine } from 'lucide-react';
 
 interface PriceTag {
   children: React.ReactNode,
@@ -78,7 +76,7 @@ const PriceTag = ({
       <div className="relative inline-flex justify-start items-center h-8">
         {/* Rectangular background that scales with text */}
         <div
-          className="h-full border-1 rounded-xl flex justify-start items-center tracking-wide transition duration-100 hover:scale-105 cursor-pointer"
+          className="group h-full border-1 rounded-xl flex justify-start items-center tracking-wide transition duration-100 hover:scale-105 cursor-pointer"
           style={{
             backgroundColor: `${color}10`, // 50% opacity
             borderColor: color
@@ -89,10 +87,26 @@ const PriceTag = ({
             style={{
               color: color,
             }}>
-            <div className="pl-2 mr-1">
-              <Icon></Icon>
+            {/* Animated icon container */}
+            <div className="pl-3 mr-2 ml-2 w-5 h-5 relative overflow-hidden">
+              {/* Original icon - slides up on hover */}
+              <div className="absolute inset-0 transition-transform duration-200 ease-in-out group-hover:-translate-y-full">
+                <Icon size={20} />
+              </div>
+              {/* Close icon - slides up from below on hover */}
+              {onRemove && (
+                <div
+                  className="absolute inset-0 transition-transform duration-200 ease-in-out translate-y-full group-hover:translate-y-0 cursor-pointer flex items-center justify-center"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove();
+                  }}
+                >
+                  <RiCloseLine size={20} />
+                </div>
+              )}
             </div>
-            <div className='ml-1 pr-2'>
+            <div className='ml-0.5 pr-3'>
               {children}
             </div>
           </div>
@@ -100,18 +114,6 @@ const PriceTag = ({
 
         {/* Fixed-size pointed edge - positioned to connect seamlessly */}
       </div>
-
-      {/* Remove button */}
-      {onRemove && (
-        <button
-          onClick={onRemove}
-          className="absolute -right-1 -top-1 w-4 h-4 bg-background border rounded-full flex items-center justify-center hover:bg-muted transition-colors z-20"
-          style={{ borderColor: color }}
-        >
-          <RiCloseLine size={10} style={{ color }} />
-          <span className="sr-only">Remove tag</span>
-        </button>
-      )}
     </div>
   );
 };
