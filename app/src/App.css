@@ -160,6 +160,58 @@
 
 body {
   letter-spacing: var(--tracking-normal);
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  /* WebKit GTK DPI/Scaling fixes */
+  zoom: 1;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-feature-settings: normal;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  /* WebKit scaling normalization */
+  transform: scale(1);
+  transform-origin: 0 0;
+}
+
+/* WebKit GTK specific scaling fixes */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+}
+
+/* Prevent webkit from applying automatic scaling */
+@media screen and (-webkit-device-pixel-ratio: 1) {
+  html { zoom: 1; }
+}
+
+@media screen and (-webkit-device-pixel-ratio: 1.25) {
+  html { zoom: 0.8; }
+}
+
+@media screen and (-webkit-device-pixel-ratio: 1.5) {
+  html { zoom: 0.67; }
+}
+
+@media screen and (-webkit-device-pixel-ratio: 2) {
+  html { zoom: 0.5; }
 }
 
 @keyframes scale-in {

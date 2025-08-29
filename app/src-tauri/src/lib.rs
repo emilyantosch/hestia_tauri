@@ -180,6 +180,8 @@ pub fn run() {
     });
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(move |app| {
             // Initialize database manager
             info!("Hello!");
@@ -189,6 +191,11 @@ pub fn run() {
                 .block_on(async { DatabaseManager::new_sqlite_default().await })
                 .expect("Failed to initialize database manager");
 
+            #[cfg(target_os = "linux")]
+            {
+                std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+                std::env::set_var("GTK_DEBUG", "interactive");
+            }
             // Test the database connection
             rt.block_on(async { db_manager.test_connection().await })
                 .expect("Database connection test failed");
@@ -196,7 +203,7 @@ pub fn run() {
             // Create file operations with database connection
             let file_operations = Arc::new(FileOperations::new(Arc::new(db_manager)));
             let file_scanner = Arc::new(DirectoryScanner::new(Arc::clone(&file_operations)));
-            let library = Library::new();
+            let library = Mutex::new(Library::last_or_new());
 
             // Preload file type cache for better performance
             rt.block_on(async {
@@ -212,7 +219,6 @@ pub fn run() {
             app.manage(fw_handler);
 
             info!("FileOperations initialized and managed as application state");
-
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
@@ -259,6 +265,14 @@ pub fn run() {
             commands::folder_management::get_folder_path_hierarchy,
             commands::folder_management::delete_empty_folders,
             commands::folder_management::get_folder_statistics,
+            // Library management
+            commands::library_management::get_library_paths,
+            commands::library_management::select_library,
+            commands::library_management::create_new_library,
+            commands::library_management::select_library_folder,
+            commands::library_management::list_available_library,
+            //Utils
+            commands::util::check_health,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

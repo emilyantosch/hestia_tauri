@@ -43,4 +43,7 @@ pkgs.mkShell {
   ];
   PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
   RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
+  GTK_DEBUG = "interactive";
+  WEBKIT_DISABLE_DMABUF_RENDERER = "1";
+  GSETTINGS_SCHEMA_DIR = "${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}/glib-2.0/schemas";
 }

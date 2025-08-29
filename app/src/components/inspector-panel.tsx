@@ -368,8 +368,8 @@ const InspectorPanelContent = () => {
               <div
                 key={tag.name}
                 className={`${animatingTags.has(tag.name)
-                    ? 'animate-scale-in'
-                    : ''
+                  ? 'animate-scale-in'
+                  : ''
                   }`}
               >
                 <PriceTag

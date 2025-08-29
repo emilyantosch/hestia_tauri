@@ -28,6 +28,11 @@ pub struct LibraryPathConfig {
     pub path: Option<PathBuf>,
 }
 
+#[derive(Serialize, Deserialize)]
+struct LastLibrary {
+    path: Option<PathBuf>,
+}
+
 impl Default for LibraryPathConfig {
     fn default() -> Self {
         LibraryPathConfig {
@@ -50,6 +55,43 @@ impl Library {
         Library {
             share_path: None,
             library_config: None,
+        }
+    }
+
+    /// Return the library from the previous run, may return LibraryError if there is none
+    pub fn last() -> Result<Library, LibraryError> {
+        let last_path = Self::create_or_validate_data_directory()?.join("hestia/last_lib.toml");
+        let mut last_content = String::new();
+        {
+            let mut file = std::fs::OpenOptions::new().read(true).open(&last_path)?;
+            file.read_to_string(&mut last_content)?;
+        }
+        let last_lib_path: LastLibrary = toml::from_str(&last_content).map_err(|e| {
+            LibraryError::with_source(
+                LibraryErrorKind::Io,
+                "Could not find last library, creating new one...".to_string(),
+                Some(Box::new(e)),
+            )
+        })?;
+        let share_path = match last_lib_path.path {
+            Some(path) => path,
+            None => {
+                return Err(LibraryError::new(
+                    LibraryErrorKind::LastLibraryNotFound,
+                    "Last library path was empty, creating new library!".to_string(),
+                ))
+            }
+        };
+        Self::new().switch_or_create_lib(&share_path)
+    }
+
+    pub fn last_or_new() -> Library {
+        match Self::last() {
+            Ok(lib) => lib,
+            Err(_) => {
+                info!("Could not find old library, executing prompt for new one!");
+                Self::new()
+            }
         }
     }
 
@@ -215,6 +257,14 @@ impl Library {
     pub fn delete(self) -> Result<(), LibraryError> {
         self._delete()?;
         Ok(())
+    }
+
+    pub fn list_libraries() -> Result<Vec<String>, LibraryError> {
+        let share_path = Library::create_or_validate_data_directory()?.join("hestia");
+        Ok(std::fs::read_dir(&share_path)?
+            .filter_map(Result::ok)
+            .map(|v| v.path().to_string_lossy().to_string())
+            .collect())
     }
 
     async fn await_path_deleted(self, timeout: Duration) -> Result<(), LibraryError> {

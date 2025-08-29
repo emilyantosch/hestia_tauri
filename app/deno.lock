@@ -17,8 +17,10 @@
     "npm:@radix-ui/react-tooltip@^1.1.8": "1.2.8_@types+react@18.3.24_@types+react-dom@18.3.7__@types+react@18.3.24_react@18.3.1_react-dom@18.3.1__react@18.3.1",
     "npm:@remixicon/react@^4.6.0": "4.6.0_react@18.3.1",
     "npm:@tailwindcss/vite@^4.0.17": "4.1.12_vite@6.3.5__@types+node@22.18.0__picomatch@4.0.3_@types+node@22.18.0",
+    "npm:@tanstack/react-query@^5.85.5": "5.85.5_react@18.3.1",
     "npm:@tauri-apps/api@2": "2.8.0",
     "npm:@tauri-apps/cli@2": "2.8.3",
+    "npm:@tauri-apps/plugin-dialog@~2.3.3": "2.3.3",
     "npm:@tauri-apps/plugin-opener@2.5": "2.5.0",
     "npm:@types/node@^22.13.14": "22.18.0",
     "npm:@types/react-dom@^18.3.1": "18.3.7_@types+react@18.3.24",
@@ -1652,6 +1654,16 @@
         "vite"
       ]
     },
+    "@tanstack/query-core@5.85.5": {
+      "integrity": "sha512-KO0WTob4JEApv69iYp1eGvfMSUkgw//IpMnq+//cORBzXf0smyRwPLrUvEe5qtAEGjwZTXrjxg+oJNP/C00t6w=="
+    },
+    "@tanstack/react-query@5.85.5_react@18.3.1": {
+      "integrity": "sha512-/X4EFNcnPiSs8wM2v+b6DqS5mmGeuJQvxBglmDxl6ZQb5V26ouD2SJYAcC3VjbNwqhY2zjxVD15rDA5nGbMn3A==",
+      "dependencies": [
+        "@tanstack/query-core",
+        "react"
+      ]
+    },
     "@tauri-apps/api@2.8.0": {
       "integrity": "sha512-ga7zdhbS2GXOMTIZRT0mYjKJtR9fivsXzsyq5U3vjDL0s6DTMwYRm0UHNjzTY5dh4+LSC68Sm/7WEiimbQNYlw=="
     },
@@ -1726,6 +1738,12 @@
         "@tauri-apps/cli-win32-x64-msvc"
       ],
       "bin": true
+    },
+    "@tauri-apps/plugin-dialog@2.3.3": {
+      "integrity": "sha512-cWXB9QJDbLIA0v7I5QY183awazBEQNPhp19iPvrMZoJRX8SbFkhWFx1/q7zy7xGpXXzxz29qtq6z21Ho7W5Iew==",
+      "dependencies": [
+        "@tauri-apps/api"
+      ]
     },
     "@tauri-apps/plugin-opener@2.5.0": {
       "integrity": "sha512-B0LShOYae4CZjN8leiNDbnfjSrTwoZakqKaWpfoH6nXiJwt6Rgj6RnVIffG3DoJiKsffRhMkjmBV9VeilSb4TA==",
@@ -2417,8 +2435,10 @@
         "npm:@radix-ui/react-tooltip@^1.1.8",
         "npm:@remixicon/react@^4.6.0",
         "npm:@tailwindcss/vite@^4.0.17",
+        "npm:@tanstack/react-query@^5.85.5",
         "npm:@tauri-apps/api@2",
         "npm:@tauri-apps/cli@2",
+        "npm:@tauri-apps/plugin-dialog@~2.3.3",
         "npm:@tauri-apps/plugin-opener@2.5",
         "npm:@types/node@^22.13.14",
         "npm:@types/react-dom@^18.3.1",

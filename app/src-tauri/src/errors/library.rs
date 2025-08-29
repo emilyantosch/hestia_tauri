@@ -1,3 +1,4 @@
+use serde::{ser::SerializeStruct, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -20,13 +21,37 @@ impl std::fmt::Display for LibraryError {
     }
 }
 
-#[derive(Debug)]
+impl serde::Serialize for LibraryError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self.source.as_ref() {
+            Some(source) => {
+                let mut s = serializer.serialize_struct("LibraryError", 3)?;
+                s.serialize_field("LibraryErrorKind", &self.kind)?;
+                s.serialize_field("Message", &self.message)?;
+                s.serialize_field("Source", &source.to_string())?;
+                s.end()
+            }
+            None => {
+                let mut s = serializer.serialize_struct("LibraryError", 2)?;
+                s.serialize_field("LibraryErrorKind", &self.kind)?;
+                s.serialize_field("Message", &self.message)?;
+                s.end()
+            }
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 pub enum LibraryErrorKind {
     CreationTimeout,
     DeletionTimeout,
     Io,
     InvalidSharePath,
     ConfigCreationError,
+    LastLibraryNotFound,
 }
 
 impl From<std::io::Error> for LibraryError {
