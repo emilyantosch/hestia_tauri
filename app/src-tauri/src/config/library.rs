@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{
     fs::read_to_string,
+    fs::File,
     io::{Read, Write},
     time::Duration,
 };
@@ -15,6 +16,12 @@ use std::path::{Path, PathBuf};
 pub struct Library {
     pub share_path: Option<std::path::PathBuf>,
     pub library_config: Option<LibraryConfig>,
+}
+
+impl Drop for Library {
+    fn drop(&mut self) {
+        let _ = self.save_last();
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -58,6 +65,36 @@ impl Library {
         }
     }
 
+    pub fn save_last(&self) -> std::result::Result<(), LibraryError> {
+        match self.share_path.as_ref() {
+            Some(path) => {
+                let last_library = LastLibrary {
+                    path: Some(path.to_owned()),
+                };
+
+                let last_library_toml: String = toml::to_string(&last_library).map_err(|e| {
+                    LibraryError::with_source(
+                        LibraryErrorKind::Io,
+                        "The conversion to TOML format of last library failed".to_string(),
+                        Some(Box::new(e)),
+                    )
+                })?;
+                {
+                    let mut file: File = std::fs::OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(path)?;
+                    file.write_all(last_library_toml.as_bytes())?;
+                    file.flush()?;
+                    file.sync_all()?;
+                }
+            }
+            None => return Ok(()),
+        };
+        Ok(())
+    }
+
     /// Return the library from the previous run, may return LibraryError if there is none
     pub fn last() -> Result<Library, LibraryError> {
         let last_path = Self::create_or_validate_data_directory()?.join("hestia/last_lib.toml");
@@ -95,7 +132,7 @@ impl Library {
         }
     }
 
-    fn create_or_validate_data_directory() -> Result<PathBuf, LibraryError> {
+    pub fn create_or_validate_data_directory() -> Result<PathBuf, LibraryError> {
         // Check whether datahome format is available on current OS
         let datahome = match dirs::data_dir() {
             Some(dir) => dir,
@@ -133,7 +170,10 @@ impl Library {
     fn _save_config(&self) -> Result<bool, LibraryError> {
         info!("Save config started!");
         let config_path = match self.share_path.as_ref() {
-            Some(path) => path.join("config.toml"),
+            Some(path) => {
+                std::fs::create_dir_all(path)?;
+                path.join("config.toml")
+            }
             None => {
                 return Err(LibraryError::new(
                     LibraryErrorKind::Io,
@@ -261,10 +301,20 @@ impl Library {
 
     pub fn list_libraries() -> Result<Vec<String>, LibraryError> {
         let share_path = Library::create_or_validate_data_directory()?.join("hestia");
-        Ok(std::fs::read_dir(&share_path)?
+        info!("The share path to list libraries {share_path:#?}");
+
+        let libraries = std::fs::read_dir(&share_path)?;
+
+        let collected_library = libraries
             .filter_map(Result::ok)
             .map(|v| v.path().to_string_lossy().to_string())
-            .collect())
+            .collect();
+        info!("List of libraries: {collected_library:#?}");
+        Ok(collected_library)
+        // Ok(std::fs::read_dir(&share_path)?
+        //     .filter_map(Result::ok)
+        //     .map(|v| v.path().to_string_lossy().to_string())
+        //     .collect())
     }
 
     async fn await_path_deleted(self, timeout: Duration) -> Result<(), LibraryError> {
