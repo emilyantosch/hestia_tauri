@@ -211,7 +211,6 @@ pub fn run() {
                     error!("Warning: Failed to preload file type cache: {:?}", e);
                 }
             });
-
             // Manage the file operations as application state
             app.manage(file_operations);
             app.manage(file_scanner);
