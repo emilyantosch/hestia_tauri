@@ -16,6 +16,9 @@ use std::path::{Path, PathBuf};
 pub struct Library {
     pub share_path: Option<std::path::PathBuf>,
     pub library_config: Option<LibraryConfig>,
+    pub name: String,
+    pub color: String,
+    pub icon: String,
 }
 
 impl Drop for Library {
@@ -26,6 +29,9 @@ impl Drop for Library {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct LibraryConfig {
+    pub name: String,
+    pub color: String,
+    pub icon: String,
     pub library_paths: Vec<LibraryPathConfig>,
 }
 

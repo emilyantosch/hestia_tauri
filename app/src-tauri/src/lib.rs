@@ -268,10 +268,10 @@ pub fn run() {
             commands::library_management::get_library_paths,
             commands::library_management::select_library,
             commands::library_management::create_new_library,
-            commands::library_management::select_library_folder,
             commands::library_management::list_available_library,
             //Utils
             commands::util::check_health,
+            commands::util::select_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,16 +1,13 @@
 use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::info;
 
 use crate::errors::{LibraryError, LibraryErrorKind};
 
-use rfd::AsyncFileDialog;
-use tauri::{command, AppHandle, State};
 
 use crate::config::library::{Library, LibraryConfig, LibraryPathConfig};
 
-#[command]
+#[tauri::command]
 pub async fn get_library_paths(
     library: tauri::State<'_, Mutex<Library>>,
 ) -> Result<Vec<LibraryPathConfig>, &str> {
@@ -20,27 +17,16 @@ pub async fn get_library_paths(
     }
 }
 
-#[command]
+///This IPC endpoint lists all libraries in the datahome directory
+#[tauri::command]
 pub async fn list_available_library() -> Result<Vec<String>, LibraryError> {
-    // For now, we'll prompt the user to select where to create the library
-    // This could be enhanced to create a default location
     info!("Trying to fetch list of libraries");
     let library_list = Library::list_libraries()?;
     info!("Library List is {library_list:#?}");
     Ok(library_list)
 }
 
-#[command]
-pub async fn select_library_folder() -> Result<Option<String>, String> {
-    let folder = AsyncFileDialog::new()
-        .set_title("Select library folder")
-        .pick_folder()
-        .await;
-
-    Ok(folder.map(|f| f.path().to_string_lossy().to_string()))
-}
-
-#[command]
+#[tauri::command]
 pub async fn select_library(
     path: String,
     library: tauri::State<'_, Mutex<Library>>,
@@ -62,30 +48,51 @@ pub async fn select_library(
     Ok(path)
 }
 
-#[command]
+///This IPC endpoint creates a new library in the data directory with at least one path config and
+///a name
+#[tauri::command]
 pub async fn create_new_library(
     name: String,
     path: String,
     library: tauri::State<'_, Mutex<Library>>,
 ) -> Result<String, LibraryError> {
+    //Extract the share path from the name of the library
     let share_path = Library::create_or_validate_data_directory()?
         .join("hestia")
         .join(&name);
+    //TODO: Check whether the share_path already exists. If so, abort creation.
+    match std::fs::exists(share_path) {
+    Ok(true) => {
+        return Err(LibraryError::new(
+                LibraryErrorKind::InvalidSharePath,
+                "The share path already exists, creation aborted".to_string(),
+            ))
+        },
+    Ok(false) => (),
+    Err(e) => {
+            return Err(LibraryError::with_source(LibraryErrorKind::InvalidSharePath, "Existance of the share path could not be verified".to_string(), Some(Box::new(e))))
+        }
+    }
+    //Parse path from string
     let path = PathBuf::from(&path);
-
     if !path.exists() || !path.is_dir() {
         return Err(LibraryError::new(
             LibraryErrorKind::InvalidSharePath,
             "The library path is not valid!".to_string(),
         ));
     }
+    let file_name = path.file_name().unwrap_or("Folder").to_string_lossy().to_string();
+
 
     // Create a new library config
     let new_config = LibraryConfig {
         library_paths: vec![LibraryPathConfig {
-            name: Some(name.clone()),
+            name: Some(file_name.clone()),
             path: Some(path.clone()),
         }],
+        name: name.clone(),
+        color: 
+        icon: 
     };
 
     // Update the library state (you may need to adjust this based on your state management)
