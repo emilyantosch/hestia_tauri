@@ -50,3 +50,4 @@ tracing = "0.1.41"
 tracing-subscriber = {version = "0.3.19", features = ["env-filter"] }
 async-trait = "0.1.89"
 tauri-plugin-dialog = "2"
+migration = { path = "../migration" }

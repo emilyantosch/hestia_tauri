@@ -1,17 +1,23 @@
+#![allow(dead_code)]
+
+use std::ffi::OsStr;
 use std::path::PathBuf;
 use tokio::sync::Mutex;
 use tracing::info;
 
-use crate::errors::{LibraryError, LibraryErrorKind};
-
-
+use crate::config::app::AppState;
 use crate::config::library::{Library, LibraryConfig, LibraryPathConfig};
+use crate::errors::{LibraryError, LibraryErrorKind};
+use crate::file_system::FileWatcherMessage;
+use crate::utils;
+use tauri::State;
 
 #[tauri::command]
 pub async fn get_library_paths(
-    library: tauri::State<'_, Mutex<Library>>,
+    app_state: State<'_, Mutex<AppState>>,
 ) -> Result<Vec<LibraryPathConfig>, &str> {
-    match library.lock().await.library_config.as_ref() {
+    let state = app_state.lock().await;
+    match state.library.library_config.as_ref() {
         Some(conf) => Ok(conf.library_paths.clone()),
         None => Err("There is no config defined!"),
     }
@@ -29,7 +35,7 @@ pub async fn list_available_library() -> Result<Vec<String>, LibraryError> {
 #[tauri::command]
 pub async fn select_library(
     path: String,
-    library: tauri::State<'_, Mutex<Library>>,
+    app_state: State<'_, Mutex<AppState>>,
 ) -> Result<String, LibraryError> {
     let library_path = PathBuf::from(&path);
 
@@ -39,12 +45,15 @@ pub async fn select_library(
             format!("The path {library_path:#?} is invalid!"),
         ));
     }
+
+    // Create the new library and switch to it
+    let new_library = Library::new().switch_or_create_lib(&library_path)?;
+
     {
-        let mut library_lock = library.lock().await;
-        let mut l: Library = Library::new().switch_or_create_lib(&library_path)?;
-        library_lock.share_path = l.share_path.take();
-        library_lock.library_config = l.library_config.take();
+        let mut state = app_state.lock().await;
+        state.switch_library(new_library).await?;
     }
+
     Ok(path)
 }
 
@@ -52,25 +61,30 @@ pub async fn select_library(
 ///a name
 #[tauri::command]
 pub async fn create_new_library(
+    app_state: State<'_, Mutex<AppState>>,
     name: String,
     path: String,
-    library: tauri::State<'_, Mutex<Library>>,
 ) -> Result<String, LibraryError> {
     //Extract the share path from the name of the library
+    info!("Trying to create new library!");
     let share_path = Library::create_or_validate_data_directory()?
         .join("hestia")
         .join(&name);
-    //TODO: Check whether the share_path already exists. If so, abort creation.
-    match std::fs::exists(share_path) {
-    Ok(true) => {
-        return Err(LibraryError::new(
+
+    match std::fs::exists(&share_path) {
+        Ok(true) => {
+            return Err(LibraryError::new(
                 LibraryErrorKind::InvalidSharePath,
                 "The share path already exists, creation aborted".to_string(),
             ))
-        },
-    Ok(false) => (),
-    Err(e) => {
-            return Err(LibraryError::with_source(LibraryErrorKind::InvalidSharePath, "Existance of the share path could not be verified".to_string(), Some(Box::new(e))))
+        }
+        Ok(false) => (),
+        Err(e) => {
+            return Err(LibraryError::with_source(
+                LibraryErrorKind::InvalidSharePath,
+                "Existance of the share path could not be verified".to_string(),
+                Some(Box::new(e)),
+            ))
         }
     }
     //Parse path from string
@@ -81,8 +95,11 @@ pub async fn create_new_library(
             "The library path is not valid!".to_string(),
         ));
     }
-    let file_name = path.file_name().unwrap_or("Folder").to_string_lossy().to_string();
-
+    let file_name = path
+        .file_name()
+        .unwrap_or(OsStr::new("Folder"))
+        .to_string_lossy()
+        .to_string();
 
     // Create a new library config
     let new_config = LibraryConfig {
@@ -91,19 +108,65 @@ pub async fn create_new_library(
             path: Some(path.clone()),
         }],
         name: name.clone(),
-        color: 
-        icon: 
+        color: utils::decorations::Color::default(),
+        icon: utils::decorations::Icon::default(),
     };
 
-    // Update the library state (you may need to adjust this based on your state management)
-    // For now, this is a placeholder - you'll need to implement proper state persistence
-    info!("Trying to set new library to name: {name:#?} and path: {path:#?}");
+    // Create the new library and switch to it using AppState
+    info!("Creating new library: {name:#?} at path: {path:#?}");
+    let mut new_library = Library::new();
+    new_library.share_path = Some(share_path.clone());
+    new_library.library_config = Some(new_config.clone());
+    new_library.save_config()?;
+
     {
-        let mut l = library.lock().await;
-        l.share_path = Some(share_path.clone());
-        l.library_config = Some(new_config.clone());
-        l.save_config()?;
+        let mut state = app_state.lock().await;
+        state.switch_library(new_library).await?;
     }
-    info!("Library set to {library:#?}");
+
+    info!("Successfully created and switched to new library");
     Ok(share_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn initialize_library_workspace(
+    app_state: State<'_, Mutex<AppState>>,
+) -> Result<(), LibraryError> {
+    info!("Initializing library workspace");
+
+    {
+        let mut state = app_state.lock().await;
+
+        // Run database migrations
+        state.run_migrations().await?;
+
+        // Perform initial directory scan
+        state.scan_library_directories().await?;
+
+        //Create FileWatcher, set handle to state
+        state.create_file_watcher().await?;
+
+        match state.file_watcher_handler.as_ref() {
+            Some(handler) => {
+                if let Some(paths_config) = state.library.library_config.as_ref() {
+                    for path_config in paths_config.library_paths.clone() {
+                        if let Some(single_path) = path_config.path {
+                            let _ = handler
+                                .sender
+                                .send(FileWatcherMessage::WatchPath(single_path.into()));
+                        }
+                    }
+                }
+            }
+            None => {
+                return Err(LibraryError::new(
+                    LibraryErrorKind::ConfigCreationError,
+                    "The file watcher has not been created correctly".to_string(),
+                ))
+            }
+        }
+    }
+
+    info!("Library workspace initialization completed successfully");
+    Ok(())
 }

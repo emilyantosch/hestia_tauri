@@ -1,4 +1,4 @@
-use crate::errors::FileError;
+use crate::errors::{FileError, FileErrorKind, LibraryError};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -6,9 +6,14 @@ pub struct CanonPath {
     path: PathBuf,
 }
 
+//FIXME: Turn this into try_from as this may fail
 impl From<PathBuf> for CanonPath {
     fn from(path: PathBuf) -> CanonPath {
-        CanonPath { path }
+        let p = match path.canonicalize() {
+            Ok(path) => path,
+            Err(_) => PathBuf::new(),
+        };
+        CanonPath { path: p }
     }
 }
 
@@ -27,5 +32,16 @@ impl AsRef<Path> for CanonPath {
 impl CanonPath {
     pub fn try_exists(&self) -> Result<bool, FileError> {
         Ok(self.path.try_exists()?)
+    }
+
+    pub fn as_str(&self) -> Result<&str, FileError> {
+        match self.path.to_str() {
+            Some(str) => Ok(str),
+            None => Err(FileError::new(
+                FileErrorKind::PathNotFoundError,
+                "The path is invalid and could not be turned into a &str!".to_string(),
+                None,
+            )),
+        }
     }
 }

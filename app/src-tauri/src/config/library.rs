@@ -5,20 +5,18 @@ use std::{
     io::{Read, Write},
     time::Duration,
 };
-use thiserror::Error;
-use tokio::{io::AsyncWriteExt, sync::Mutex};
 use tracing::{error, info};
 
-use crate::errors::{FileError, FileErrorKind, LibraryError, LibraryErrorKind};
+use crate::{
+    errors::{FileError, FileErrorKind, LibraryError, LibraryErrorKind},
+    utils::{self, canon_path::CanonPath},
+};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct Library {
     pub share_path: Option<std::path::PathBuf>,
     pub library_config: Option<LibraryConfig>,
-    pub name: String,
-    pub color: String,
-    pub icon: String,
 }
 
 impl Drop for Library {
@@ -30,8 +28,8 @@ impl Drop for Library {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct LibraryConfig {
     pub name: String,
-    pub color: String,
-    pub icon: String,
+    pub color: utils::decorations::Color,
+    pub icon: utils::decorations::Icon,
     pub library_paths: Vec<LibraryPathConfig>,
 }
 
@@ -58,6 +56,9 @@ impl Default for LibraryPathConfig {
 impl Default for LibraryConfig {
     fn default() -> Self {
         LibraryConfig {
+            name: "Library".to_string(),
+            color: utils::decorations::Color::default(),
+            icon: utils::decorations::Icon::default(),
             library_paths: vec![LibraryPathConfig::default()],
         }
     }
@@ -164,16 +165,24 @@ impl Library {
         Ok(datahome)
     }
 
+    pub fn get_canon_database_path(&self) -> Result<CanonPath, LibraryError> {
+        let db_path = match self.share_path.as_ref() {
+            Some(path) => path.join("db.sqlite"),
+            None => {
+                return Err(LibraryError::new(
+                    LibraryErrorKind::Io,
+                    "No db path found at!".to_string(),
+                ));
+            }
+        };
+        Ok(CanonPath::from(db_path))
+    }
     /// Save the config into a file on the disk that is specified in the share path of the Library
     /// Returns:
     ///     - Ok(true): The save to disk was a success
     ///     - Ok(false): The save to disk was a success, but the file had to be created
     ///     - Err: The save to disk failed either because share path was not set or the write to the file failed
     pub fn save_config(&self) -> Result<bool, LibraryError> {
-        self._save_config()
-    }
-
-    fn _save_config(&self) -> Result<bool, LibraryError> {
         info!("Save config started!");
         let config_path = match self.share_path.as_ref() {
             Some(path) => {
@@ -183,12 +192,16 @@ impl Library {
             None => {
                 return Err(LibraryError::new(
                     LibraryErrorKind::Io,
-                    format!("No config path found at!"),
+                    "No config path found at!".to_string(),
                 ));
             }
         };
         info!("Config Path {config_path:#?} extracted!");
+        Self::open_or_create_database_file(self.share_path.as_ref().unwrap())?;
+        self._save_config(config_path)
+    }
 
+    fn _save_config(&self, config_path: PathBuf) -> Result<bool, LibraryError> {
         match std::fs::exists(&config_path) {
             Ok(true) => {
                 match self.library_config.as_ref() {
@@ -400,7 +413,7 @@ impl Library {
         println!("Share path starts with data home");
         match share_path.try_exists() {
             Ok(true) => (),
-            Ok(false) => std::fs::create_dir_all(&share_path)?,
+            Ok(false) => std::fs::create_dir_all(share_path)?,
             Err(e) => {
                 return Err(LibraryError::with_source(
                     LibraryErrorKind::InvalidSharePath,
@@ -480,6 +493,7 @@ impl Library {
         Ok(())
     }
 
+    //TODO: Refactor this into being a struct method and not static
     fn open_or_create_config_file(share_path: &Path) -> Result<PathBuf, LibraryError> {
         let config_path = share_path.join("config.toml");
         let content = toml::to_string(&LibraryConfig::default()).map_err(|e| {
@@ -499,6 +513,8 @@ impl Library {
                     .truncate(false)
                     .open(&config_path)?;
                 file.write_all(content.as_bytes())?;
+                file.flush()?;
+                file.sync_all()?;
             }
             Err(e) => {
                 return Err(LibraryError::with_source(
@@ -511,6 +527,7 @@ impl Library {
         Ok(config_path)
     }
 
+    //TODO: Refactor this into being a struct method and not static
     fn open_or_create_database_file(share_path: &Path) -> Result<PathBuf, LibraryError> {
         println!("Trying to open share path database");
         let db_path = share_path.join("db.sqlite");

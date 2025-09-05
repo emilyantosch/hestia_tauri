@@ -1,3 +1,4 @@
+use std::alloc::System;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -7,17 +8,20 @@ use async_recursion::async_recursion;
 use tokio::fs;
 
 use crate::config::scanner::ScanConfig;
-use crate::database::{FileInfo, FileMetadata, FileOperations};
+use crate::database::{FileInfo, FileMetadata, FileOperations, FolderInfo};
 use crate::errors::{AppError, DbError};
-use crate::file_system::FileHash;
+use crate::file_system::{FileHash, FolderHash};
+use tracing::info;
 
 /// Types of synchronization operations
 #[derive(Debug, Clone)]
 pub enum SyncOperation {
     /// Insert a new file into the database
-    Insert(FileInfo),
+    InsertFile(FileInfo),
+    InsertFolder(FolderInfo),
     /// Update an existing file in the database
-    Update(FileInfo),
+    UpdateFile(FileInfo),
+    UpdateFolder(FolderInfo),
     /// Delete a file from the database (file no longer exists)
     Delete(PathBuf),
 }
@@ -53,6 +57,7 @@ impl SyncReport {
 }
 
 /// Directory scanner that synchronizes filesystem state with database
+#[derive(Debug)]
 pub struct DirectoryScanner {
     file_operations: Arc<FileOperations>,
     config: ScanConfig,
@@ -80,7 +85,7 @@ impl DirectoryScanner {
         let start_time = Instant::now();
         let mut report = SyncReport::new();
 
-        println!("Starting directory sync for: {}", dir_path.display());
+        info!("Starting directory sync for: {}", dir_path.display());
 
         // 1. Get current database state
         let db_state = match self.file_operations.get_directory_state(dir_path).await {
@@ -92,7 +97,7 @@ impl DirectoryScanner {
             }
         };
 
-        println!("Found {} files in database", db_state.len());
+        info!("Found {} files in database", db_state.len());
 
         // 2. Scan filesystem
         let fs_files = match self.scan_filesystem_recursive(dir_path).await {
@@ -104,30 +109,57 @@ impl DirectoryScanner {
             }
         };
 
-        report.files_scanned = fs_files.len();
-        println!("Found {} files in filesystem", fs_files.len());
+        report.files_scanned = fs_files.0.len();
+        info!("Found {} files in filesystem", fs_files.0.len());
 
-        // 3. Calculate sync operations
-        let operations = self.calculate_sync_operations(db_state, fs_files);
-        println!("Calculated {} operations to perform", operations.len());
+        // 3a. Calculate file sync operations
+        let mut operations: Vec<SyncOperation> =
+            self.calculate_file_sync_operations(db_state, fs_files.0);
+        info!("Calculated {} file operations to perform", operations.len());
+
+        // 3b. Calculate all sync operations
+        operations.extend(self.calculate_folder_sync_operations(db_state, fs_files.1));
+        info!(
+            "Calculated {} file and folder operations to perform",
+            operations.len()
+        );
 
         // 4. Execute operations in batches
-        let mut insert_batch = Vec::new();
+        let mut upsert_file_batch = Vec::new();
         let mut delete_batch = Vec::new();
 
+        let mut upsert_folder_batch = Vec::new();
+        let mut delete_folder_batch = Vec::new();
+
+        //TODO: Split up into files and folders, may need to implement trait dependency injection
+        //to make it more ergonomic in the future
         for operation in operations {
             match operation {
-                SyncOperation::Insert(file_info) => {
-                    insert_batch.push(file_info);
-                    if insert_batch.len() >= self.config.batch_size {
-                        self.execute_insert_batch(&mut insert_batch, &mut report)
+                SyncOperation::InsertFile(file_info) => {
+                    upsert_file_batch.push(file_info);
+                    if upsert_file_batch.len() >= self.config.batch_size {
+                        self.execute_insert_batch(&mut upsert_file_batch, &mut report)
                             .await;
                     }
                 }
-                SyncOperation::Update(file_info) => {
-                    insert_batch.push(file_info); // Upsert handles both insert and update
-                    if insert_batch.len() >= self.config.batch_size {
-                        self.execute_insert_batch(&mut insert_batch, &mut report)
+                SyncOperation::InsertFolder(folder_info) => {
+                    upsert_folder_batch.push(folder_info);
+                    if upsert_folder_batch.len() >= self.config.batch_size {
+                        self.execute_upsert_folder_batch(&mut upsert_folder_batch, &mut report)
+                            .await;
+                    }
+                }
+                SyncOperation::UpdateFile(file_info) => {
+                    upsert_file_batch.push(file_info); // Upsert handles both insert and update
+                    if upsert_file_batch.len() >= self.config.batch_size {
+                        self.execute_insert_batch(&mut upsert_file_batch, &mut report)
+                            .await;
+                    }
+                }
+                SyncOperation::UpdateFolder(folder_info) => {
+                    upsert_folder_batch.push(folder_info); // Upsert handles both insert and update
+                    if upsert_folder_batch.len() >= self.config.batch_size {
+                        self.execute_upsert_folder_batch(&mut upsert_folder_batch, &mut report)
                             .await;
                     }
                 }
@@ -142,8 +174,8 @@ impl DirectoryScanner {
         }
 
         // Execute remaining batches
-        if !insert_batch.is_empty() {
-            self.execute_insert_batch(&mut insert_batch, &mut report)
+        if !upsert_file_batch.is_empty() {
+            self.execute_insert_batch(&mut upsert_file_batch, &mut report)
                 .await;
         }
         if !delete_batch.is_empty() {
@@ -166,10 +198,15 @@ impl DirectoryScanner {
     }
 
     /// Scan filesystem recursively and return file information
-    async fn scan_filesystem_recursive(&self, dir_path: &Path) -> Result<Vec<FileInfo>, AppError> {
+    async fn scan_filesystem_recursive(
+        &self,
+        dir_path: &Path,
+    ) -> Result<(Vec<FileInfo>, Vec<FolderInfo>), AppError> {
         let mut files = Vec::new();
-        self.scan_directory_impl(dir_path, &mut files).await?;
-        Ok(files)
+        let mut folders = Vec::new();
+        self.scan_directory_impl(dir_path, &mut files, &mut folders)
+            .await?;
+        Ok((files, folders))
     }
 
     /// Recursive implementation of directory scanning
@@ -178,7 +215,10 @@ impl DirectoryScanner {
         &self,
         dir_path: &Path,
         files: &mut Vec<FileInfo>,
+        folders: &mut Vec<FolderInfo>,
     ) -> Result<(), AppError> {
+        //TODO: Also need to add the root directory, which then could be one of the only ones, that
+        //does not have a parent_folder_id
         let mut entries = match fs::read_dir(dir_path).await {
             Ok(entries) => entries,
             Err(e) => {
@@ -202,9 +242,18 @@ impl DirectoryScanner {
                     }
                 }
 
+                //TODO: Also need to add all of the folders, recurse into them and add all folders
+                //into database.
+                match self.create_folder_info(&path).await {
+                    Ok(folder_info) => folders.push(folder_info),
+                    Err(e) => {
+                        return Err(e);
+                    }
+                }
+
                 // Recurse into subdirectory if configured
                 if self.config.recursive {
-                    self.scan_directory_impl(&path, files).await?;
+                    self.scan_directory_impl(&path, files, folders).await?;
                 }
             } else if path.is_file() {
                 // Check if file should be ignored
@@ -272,8 +321,44 @@ impl DirectoryScanner {
         })
     }
 
+    /// Create FolderInfo from a filesystem path
+    async fn create_folder_info(&self, path: &Path) -> Result<FolderInfo, AppError> {
+        let metadata = fs::metadata(path)
+            .await
+            .map_err(|e| AppError::Categorized {
+                kind: crate::errors::AppErrorKind::FileError,
+                message: format!("Failed to get file metadata: {}", e),
+                source: Some(Box::new(e)),
+            })?;
+
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        // Calculate file hash using sophisticated algorithm
+        let folder_hash = FolderHash::hash(path).await?;
+        let content_hash_str = format!("{:?}", folder_hash.content_hash);
+        let identity_hash_str = format!("{:?}", folder_hash.identity_hash);
+        let structure_hash_str = format!("{:?}", folder_hash.structure_hash);
+
+        // Detect file type
+        let file_type_name = self.detect_file_type(path);
+
+        Ok(FolderInfo {
+            path: path.to_path_buf(),
+            name,
+            content_hash: content_hash_str,
+            identity_hash: identity_hash_str,
+            structure_hash: structure_hash_str,
+            file_system_id: None,   // Will be set during database operations
+            parent_folder_id: None, // Will be set during database operations
+        })
+    }
+
     /// Calculate what operations need to be performed
-    fn calculate_sync_operations(
+    fn calculate_file_sync_operations(
         &self,
         db_state: HashMap<PathBuf, FileMetadata>,
         fs_files: Vec<FileInfo>,
@@ -291,13 +376,52 @@ impl DirectoryScanner {
                     if db_metadata.content_hash != fs_file.content_hash
                         || db_metadata.identity_hash != fs_file.identity_hash
                     {
-                        operations.push(SyncOperation::Update(fs_file));
+                        operations.push(SyncOperation::UpdateFile(fs_file));
                     }
                     // If hashes match, no operation needed
                 }
                 None => {
                     // File doesn't exist in database, insert it
-                    operations.push(SyncOperation::Insert(fs_file));
+                    operations.push(SyncOperation::InsertFile(fs_file));
+                }
+            }
+        }
+
+        // Check for files in database that no longer exist in filesystem
+        for (db_path, _) in db_state {
+            if !processed_paths.contains(&db_path) {
+                operations.push(SyncOperation::Delete(db_path));
+            }
+        }
+
+        operations
+    }
+
+    fn calculate_folder_sync_operations(
+        &self,
+        db_state: HashMap<PathBuf, FileMetadata>,
+        fs_folders: Vec<FolderInfo>,
+    ) -> Vec<SyncOperation> {
+        let mut operations = Vec::new();
+        let mut processed_paths = std::collections::HashSet::new();
+
+        // Check filesystem files against database
+        for fs_folder in fs_folders {
+            processed_paths.insert(fs_folder.path.clone());
+
+            match db_state.get(&fs_folder.path) {
+                Some(db_metadata) => {
+                    // File exists in database, check if it needs updating
+                    if db_metadata.content_hash != fs_folder.content_hash
+                        || db_metadata.identity_hash != fs_folder.identity_hash
+                    {
+                        operations.push(SyncOperation::UpdateFolder(fs_folder));
+                    }
+                    // If hashes match, no operation needed
+                }
+                None => {
+                    // File doesn't exist in database, insert it
+                    operations.push(SyncOperation::InsertFolder(fs_folder));
                 }
             }
         }

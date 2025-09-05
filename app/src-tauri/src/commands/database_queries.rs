@@ -1,4 +1,5 @@
-use std::sync::Arc;
+#![allow(dead_code)]
+use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::{command, State};
@@ -10,7 +11,7 @@ use sea_orm::{
 
 use super::file_operations::FileInfo;
 use super::tag_management::TagInfo;
-use crate::database::DatabaseManager;
+use crate::config::app::AppState;
 
 use entity::{file_has_tags, file_types, files, prelude::*, tags};
 
@@ -81,12 +82,15 @@ pub struct TagUsageCount {
 /// Search files with filters and pagination
 #[command]
 pub async fn search_files(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     filters: FileSearchFilters,
     page: Option<u64>,
     per_page: Option<u64>,
 ) -> Result<SearchResults<FileInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
     let page = page.unwrap_or(1);
     let per_page = per_page.unwrap_or(50).min(200); // Cap at 200 items per page
     let offset = (page - 1) * per_page;
@@ -95,7 +99,7 @@ pub async fn search_files(
 
     // Apply name filter
     if let Some(name_pattern) = &filters.name_pattern {
-        let pattern = format!("%{}%", name_pattern);
+        let pattern = format!("%{name_pattern}%");
         query = query.filter(files::Column::Name.like(&pattern));
     }
 
@@ -190,11 +194,14 @@ pub async fn search_files(
 /// Get files with full details (including tags and type)
 #[command]
 pub async fn get_files_with_details(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     page: Option<u64>,
     per_page: Option<u64>,
 ) -> Result<SearchResults<FileWithDetails>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
     let page = page.unwrap_or(1);
     let per_page = per_page.unwrap_or(50).min(200);
     let offset = (page - 1) * per_page;
@@ -277,9 +284,12 @@ pub async fn get_files_with_details(
 /// Get database statistics
 #[command]
 pub async fn get_database_stats(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
 ) -> Result<DatabaseStats, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     // Get total counts
     let total_files = match Files::find().count(&*connection).await {
@@ -364,7 +374,7 @@ pub async fn get_database_stats(
 /// Search files by multiple tag names with AND/OR logic
 #[command]
 pub async fn search_files_by_tags(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     tag_names: Vec<String>,
     require_all_tags: Option<bool>,
     page: Option<u64>,
@@ -382,15 +392,18 @@ pub async fn search_files_by_tags(
         updated_before: None,
     };
 
-    search_files(db_manager, filters, page, per_page).await
+    search_files(app_state, filters, page, per_page).await
 }
 
 /// Find duplicate files based on content hash
 #[command]
 pub async fn find_duplicate_files(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
 ) -> Result<Vec<Vec<FileInfo>>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     // Get all files
     let all_files = match Files::find().all(&*connection).await {
@@ -422,11 +435,14 @@ pub async fn find_duplicate_files(
 /// Get files without any tags
 #[command]
 pub async fn get_untagged_files(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     page: Option<u64>,
     per_page: Option<u64>,
 ) -> Result<SearchResults<FileInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
     let page = page.unwrap_or(1);
     let per_page = per_page.unwrap_or(50).min(200);
     let offset = (page - 1) * per_page;
@@ -480,10 +496,13 @@ pub async fn get_untagged_files(
 /// Get recently added files
 #[command]
 pub async fn get_recent_files(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     limit: Option<u64>,
 ) -> Result<Vec<FileInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
     let limit = limit.unwrap_or(50).min(200);
 
     match Files::find()
@@ -500,10 +519,13 @@ pub async fn get_recent_files(
 /// Get recently updated files
 #[command]
 pub async fn get_recently_updated_files(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     limit: Option<u64>,
 ) -> Result<Vec<FileInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
     let limit = limit.unwrap_or(50).min(200);
 
     match Files::find()

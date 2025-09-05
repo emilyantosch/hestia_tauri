@@ -26,6 +26,17 @@ pub struct FileInfo {
     pub file_system_id: Option<i32>,
 }
 
+#[derive(Debug, Clone)]
+pub struct FolderInfo {
+    pub path: PathBuf,
+    pub name: String,
+    pub content_hash: String,
+    pub identity_hash: String,
+    pub structure_hash: String,
+    pub file_system_id: Option<i32>,
+    pub parent_folder_id: Option<i32>,
+}
+
 /// Database file metadata for comparison
 #[derive(Debug, Clone)]
 pub struct FileMetadata {
@@ -38,6 +49,7 @@ pub struct FileMetadata {
 }
 
 /// Database operations for file management with caching and bulk operations
+#[derive(Debug)]
 pub struct FileOperations {
     database_manager: Arc<DatabaseManager>,
     file_type_cache: Arc<RwLock<HashMap<String, i32>>>,
@@ -89,14 +101,14 @@ impl FileOperations {
                         e,
                     )
                 })? {
-                Some(model) => Some(model.id),
+                Some(model) => model.id,
                 None => {
                     return Ok(None);
                 }
             }
         };
 
-        Ok(parent_folder_id)
+        Ok(Some(parent_folder_id))
     }
 
     pub async fn find_folder_by_id(&self, fsi_id: i32) -> Result<Option<folders::Model>, DbError> {
@@ -203,9 +215,18 @@ impl FileOperations {
             .get_or_create_file_system_identifier(&folder_path, &transaction)
             .await?;
 
-        let parent_folder_id = self
+        let parent_folder_id = match self
             .get_or_create_parent_folder_id(&folder_path, &transaction)
-            .await?;
+            .await?
+        {
+            Some(parent_folder_id) => parent_folder_id,
+            None => {
+                return Err(DbError::new(
+                    DbErrorKind::QueryError,
+                    "The file has no parent folder id, which can not happen".to_string(),
+                ))
+            }
+        };
 
         //  What we actually wanna do is check if the file exists by fsi and/or hash.
         let folder_with_fsi = Folders::find()

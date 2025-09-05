@@ -1,6 +1,8 @@
 use serde::{ser::SerializeStruct, Serialize};
 use thiserror::Error;
 
+use crate::errors::FileError;
+
 #[derive(Debug, Error)]
 pub struct LibraryError {
     kind: LibraryErrorKind,
@@ -52,6 +54,12 @@ pub enum LibraryErrorKind {
     InvalidSharePath,
     ConfigCreationError,
     LastLibraryNotFound,
+}
+
+impl From<FileError> for LibraryError {
+    fn from(value: FileError) -> Self {
+        LibraryError::new(LibraryErrorKind::Io, value.message)
+    }
 }
 
 impl From<std::io::Error> for LibraryError {

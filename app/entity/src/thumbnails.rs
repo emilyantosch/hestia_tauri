@@ -3,12 +3,18 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "file_has_tags")]
+#[sea_orm(table_name = "thumbnails")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
     pub file_id: i32,
-    pub tag_id: i32,
+    pub size: String,
+    #[sea_orm(column_type = "Binary(10485760)")]
+    pub data: Vec<u8>,
+    pub mime_type: String,
+    pub file_size: i32,
+    pub created_at: DateTime,
+    pub updated_at: DateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -21,25 +27,11 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Files,
-    #[sea_orm(
-        belongs_to = "super::tags::Entity",
-        from = "Column::TagId",
-        to = "super::tags::Column::Id",
-        on_update = "Cascade",
-        on_delete = "Cascade"
-    )]
-    Tags,
 }
 
 impl Related<super::files::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Files.def()
-    }
-}
-
-impl Related<super::tags::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Tags.def()
     }
 }
 

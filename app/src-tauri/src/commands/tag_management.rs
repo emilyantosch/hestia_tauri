@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::{command, State};
@@ -7,7 +7,7 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set, TransactionTrait,
 };
 
-use crate::database::DatabaseManager;
+use crate::config::app::AppState;
 use crate::errors::{DbError, DbErrorKind};
 
 use entity::{file_has_tags, files, prelude::*, tags};
@@ -45,10 +45,13 @@ pub struct FileTagInfo {
 /// Create a new tag
 #[command]
 pub async fn create_tag(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     tag_name: String,
 ) -> Result<TagInfo, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     // Check if tag already exists
     match Tags::find()
@@ -83,10 +86,11 @@ pub async fn create_tag(
 
 /// Get all tags
 #[command]
-pub async fn get_all_tags(
-    db_manager: State<'_, Arc<DatabaseManager>>,
-) -> Result<Vec<TagInfo>, String> {
-    let connection = db_manager.get_connection();
+pub async fn get_all_tags(app_state: State<'_, Mutex<AppState>>) -> Result<Vec<TagInfo>, String> {
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     match Tags::find().all(&*connection).await {
         Ok(tags) => Ok(tags.into_iter().map(|t| t.into()).collect()),
@@ -97,10 +101,13 @@ pub async fn get_all_tags(
 /// Get tag by ID
 #[command]
 pub async fn get_tag_by_id(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     tag_id: i32,
 ) -> Result<Option<TagInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     match Tags::find_by_id(tag_id).one(&*connection).await {
         Ok(Some(tag)) => Ok(Some(tag.into())),
@@ -112,10 +119,13 @@ pub async fn get_tag_by_id(
 /// Get tag by name
 #[command]
 pub async fn get_tag_by_name(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     tag_name: String,
 ) -> Result<Option<TagInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     match Tags::find()
         .filter(tags::Column::Name.eq(&tag_name))
@@ -131,11 +141,14 @@ pub async fn get_tag_by_name(
 /// Update tag name
 #[command]
 pub async fn update_tag(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     tag_id: i32,
     new_name: String,
 ) -> Result<TagInfo, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     // Check if tag exists
     let existing_tag = match Tags::find_by_id(tag_id).one(&*connection).await {
@@ -168,10 +181,13 @@ pub async fn update_tag(
 /// Delete a tag
 #[command]
 pub async fn delete_tag(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     tag_id: i32,
 ) -> Result<bool, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     // Start transaction
     let transaction = match connection.begin().await {
@@ -219,11 +235,14 @@ pub async fn delete_tag(
 /// Add tag to file
 #[command]
 pub async fn add_tag_to_file(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     file_id: i32,
     tag_id: i32,
 ) -> Result<FileTagInfo, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     // Check if file exists
     if Files::find_by_id(file_id)
@@ -277,11 +296,14 @@ pub async fn add_tag_to_file(
 /// Remove tag from file
 #[command]
 pub async fn remove_tag_from_file(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     file_id: i32,
     tag_id: i32,
 ) -> Result<bool, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     let delete_result = match file_has_tags::Entity::delete_many()
         .filter(file_has_tags::Column::FileId.eq(file_id))
@@ -299,10 +321,13 @@ pub async fn remove_tag_from_file(
 /// Get all tags for a file
 #[command]
 pub async fn get_tags_for_file(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     file_id: i32,
 ) -> Result<Vec<TagInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     // Get file-tag relationships
     let file_tag_relationships = match file_has_tags::Entity::find()
@@ -331,10 +356,13 @@ pub async fn get_tags_for_file(
 /// Get all files for a tag
 #[command]
 pub async fn get_files_for_tag(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     tag_id: i32,
 ) -> Result<Vec<super::file_operations::FileInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     // Get file-tag relationships
     let file_tag_relationships = match file_has_tags::Entity::find()
@@ -363,9 +391,12 @@ pub async fn get_files_for_tag(
 /// Get all file-tag relationships
 #[command]
 pub async fn get_all_file_tag_relationships(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
 ) -> Result<Vec<FileTagInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     match file_has_tags::Entity::find().all(&*connection).await {
         Ok(relationships) => {
@@ -388,10 +419,13 @@ pub async fn get_all_file_tag_relationships(
 /// Search tags by name pattern
 #[command]
 pub async fn search_tags_by_name(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     search_pattern: String,
 ) -> Result<Vec<TagInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().unwrap();
+        state.database_manager.get_connection()
+    };
 
     let pattern = format!("%{}%", search_pattern);
 

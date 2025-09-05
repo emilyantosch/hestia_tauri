@@ -74,9 +74,9 @@ function LibraryList({ callback }: LibraryListProps): React.ReactNode {
               </div>
               <span className="font-medium text-sm">{libraryName}</span>
             </div>
-            <RiArrowRightLine 
-              size={16} 
-              className="text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all duration-200" 
+            <RiArrowRightLine
+              size={16}
+              className="text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all duration-200"
             />
           </div>
         ))
@@ -96,45 +96,34 @@ export function LibrarySetup({ onLibraryCreated }: LibrarySetupProps) {
 
 
 
-  const handleCreateNew = async () => {
-    if (!newLibraryName.trim()) return;
-
-    try {
-      setIsCreating(true);
-      const path = await invoke("select_library_folder");
-      // This will be implemented on the Rust side
-      await invoke("create_new_library", { name: newLibraryName.trim(), path });
-      onLibraryCreated();
-    } catch (error) {
-      console.error("Failed to create library:", error);
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
   const handleSelectExisting = async (path: String) => {
     try {
       await invoke("select_library", { path });
+      await invoke("initialize_library_workspace");
+      console.log("INFO: Reinitialzation of libraray workspace complete, finalizing...");
       onLibraryCreated();
     } catch (error) {
       console.error("Failed to open existing library due to:", error);
     }
   };
 
-  const handleOpenExisting = async () => {
+  const handleCreateNew = async () => {
+    if (!newLibraryName.trim()) return;
+
     try {
-      setIsOpening(true);
+      setIsCreating(true);
+      const path = await invoke("select_folder");
+      console.log("INFO: Extracted Path for new library");
       // This will be implemented on the Rust side
-      const path = await invoke("select_library_folder");
-      console.log(path);
-      if (path) {
-        await invoke("select_library", { path });
-        onLibraryCreated();
-      }
+      await invoke("create_new_library", { name: newLibraryName.trim(), path });
+      console.log("INFO: Created new library, refetching...");
+      await invoke("initialize_library_workspace");
+      console.log("INFO: Reinitialzation of libraray workspace complete, finalizing...");
+      onLibraryCreated();
     } catch (error) {
-      console.error("Failed to open library:", error);
+      console.error("Failed to create library:", error);
     } finally {
-      setIsOpening(false);
+      setIsCreating(false);
     }
   };
 

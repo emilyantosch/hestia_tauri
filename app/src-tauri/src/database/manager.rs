@@ -6,6 +6,7 @@ use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
 use crate::config::database::{DatabaseSettings, DatabaseType};
 use crate::errors::{DbError, DbErrorKind};
 
+#[derive(Debug)]
 pub struct DatabaseManager {
     connection: Arc<DatabaseConnection>,
     settings: DatabaseSettings,

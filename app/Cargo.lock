@@ -2114,6 +2114,7 @@ dependencies = [
  "entity",
  "gtk",
  "keyring",
+ "migration",
  "notify",
  "notify-debouncer-full",
  "password-hash",
