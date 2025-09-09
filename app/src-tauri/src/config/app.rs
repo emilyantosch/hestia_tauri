@@ -5,7 +5,7 @@ use tracing::{error, info};
 use crate::{
     config::library::Library,
     database::{DatabaseManager, FileOperations},
-    errors::LibraryError,
+    errors::{LibraryError, LibraryErrorKind},
     file_system::{
         DatabaseFileWatcherEventHandler, DirectoryScanner, FileWatcher, FileWatcherHandler,
     },
@@ -182,6 +182,27 @@ impl AppState {
         }
     }
 
+    pub async fn upsert_root_folders(&self) -> Result<(), LibraryError> {
+        let library_paths = self.get_library_paths();
+
+        if library_paths.is_empty() {
+            info!("No library paths to upsert");
+            return Ok(());
+        }
+
+        self.file_operations
+            .upsert_root_folders(library_paths)
+            .await
+            .map_err(|e| {
+                LibraryError::with_source(
+                    LibraryErrorKind::Io,
+                    "Unable to upsert root folders from library config!".to_string(),
+                    Some(Box::new(e)),
+                )
+            })?;
+
+        Ok(())
+    }
     /// Perform initial directory scan for all library paths
     pub async fn scan_library_directories(&self) -> Result<(), LibraryError> {
         let library_paths = self.get_library_paths();
@@ -200,12 +221,24 @@ impl AppState {
             match self.directory_scanner.sync_directory(&path).await {
                 Ok(report) => {
                     info!(
-                        "Scanned {}: {} files scanned, {} inserted, {} updated, {} deleted",
+                        r"Scanned {}: 
+                        {} files scanned, 
+                        {} folders scanned, 
+                        {} files inserted, 
+                        {} folders inserted, 
+                        {} files updated, 
+                        {} folders updated, 
+                        {} files deleted,
+                        {} folders deleted",
                         path.display(),
                         report.files_scanned,
+                        report.folders_scanned,
                         report.files_inserted,
+                        report.folders_inserted,
                         report.files_updated,
-                        report.files_deleted
+                        report.folders_updated,
+                        report.files_deleted,
+                        report.folders_deleted
                     );
                 }
                 Err(e) => {

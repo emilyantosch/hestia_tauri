@@ -3,6 +3,7 @@
 
 mod commands;
 mod config;
+mod data;
 mod database;
 mod errors;
 mod file_system;

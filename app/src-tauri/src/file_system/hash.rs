@@ -5,7 +5,7 @@ use std::path::Path;
 use tokio::fs as async_fs;
 use tracing::info;
 
-use crate::errors::AppError;
+use crate::errors::{AppError, FileError};
 use crate::errors::{HashError, HashErrorKind};
 use crate::file_system::FileId;
 
@@ -25,7 +25,7 @@ pub struct FolderHash {
 }
 
 impl FileHash {
-    pub async fn hash(path: &Path) -> Result<FileHash, AppError> {
+    pub async fn hash(path: &Path) -> Result<FileHash, FileError> {
         info!("Trying to extract file id for {path:#?}");
         let file_id = FileId::extract(path).await?;
 
@@ -100,7 +100,7 @@ impl FileHash {
 
 impl FolderHash {
     #[async_recursion]
-    pub async fn hash(path: &Path) -> Result<FolderHash, AppError> {
+    pub async fn hash(path: &Path) -> Result<FolderHash, FileError> {
         let file_id = FileId::extract(path).await?;
 
         let (structure_hash, content_hash) = Self::_hash_folder(path).await?;

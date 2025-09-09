@@ -8,8 +8,9 @@ use async_recursion::async_recursion;
 use tokio::fs;
 
 use crate::config::scanner::ScanConfig;
-use crate::database::{FileInfo, FileMetadata, FileOperations, FolderInfo};
-use crate::errors::{AppError, DbError};
+use crate::database::{FileMetadata, FileOperations};
+use crate::errors::{AppError, DbError, FileError};
+use crate::file_system::utils::{FileInfo, FolderInfo};
 use crate::file_system::{FileHash, FolderHash};
 use tracing::info;
 
@@ -23,7 +24,8 @@ pub enum SyncOperation {
     UpdateFile(FileInfo),
     UpdateFolder(FolderInfo),
     /// Delete a file from the database (file no longer exists)
-    Delete(PathBuf),
+    DeleteFile(PathBuf),
+    DeleteFolder(PathBuf),
 }
 
 /// Report of synchronization operations
@@ -34,6 +36,11 @@ pub struct SyncReport {
     pub files_updated: usize,
     pub files_deleted: usize,
     pub files_skipped: usize,
+    pub folders_scanned: usize,
+    pub folders_inserted: usize,
+    pub folders_updated: usize,
+    pub folders_deleted: usize,
+    pub folders_skipped: usize,
     pub errors: Vec<String>,
     pub duration: std::time::Duration,
 }
@@ -46,6 +53,11 @@ impl SyncReport {
             files_updated: 0,
             files_deleted: 0,
             files_skipped: 0,
+            folders_scanned: 0,
+            folders_inserted: 0,
+            folders_updated: 0,
+            folders_deleted: 0,
+            folders_skipped: 0,
             errors: Vec::new(),
             duration: std::time::Duration::from_secs(0),
         }
@@ -112,13 +124,16 @@ impl DirectoryScanner {
         report.files_scanned = fs_files.0.len();
         info!("Found {} files in filesystem", fs_files.0.len());
 
+        report.folders_scanned = fs_files.1.len();
+        info!("Found {} folders in filesystem", fs_files.1.len());
+
         // 3a. Calculate file sync operations
         let mut operations: Vec<SyncOperation> =
-            self.calculate_file_sync_operations(db_state, fs_files.0);
+            self.calculate_file_sync_operations(&db_state, fs_files.0);
         info!("Calculated {} file operations to perform", operations.len());
 
         // 3b. Calculate all sync operations
-        operations.extend(self.calculate_folder_sync_operations(db_state, fs_files.1));
+        operations.extend(self.calculate_folder_sync_operations(&db_state, fs_files.1));
         info!(
             "Calculated {} file and folder operations to perform",
             operations.len()
@@ -126,7 +141,7 @@ impl DirectoryScanner {
 
         // 4. Execute operations in batches
         let mut upsert_file_batch = Vec::new();
-        let mut delete_batch = Vec::new();
+        let mut delete_file_batch = Vec::new();
 
         let mut upsert_folder_batch = Vec::new();
         let mut delete_folder_batch = Vec::new();
@@ -138,7 +153,7 @@ impl DirectoryScanner {
                 SyncOperation::InsertFile(file_info) => {
                     upsert_file_batch.push(file_info);
                     if upsert_file_batch.len() >= self.config.batch_size {
-                        self.execute_insert_batch(&mut upsert_file_batch, &mut report)
+                        self.execute_upsert_file_batch(&mut upsert_file_batch, &mut report)
                             .await;
                     }
                 }
@@ -152,7 +167,7 @@ impl DirectoryScanner {
                 SyncOperation::UpdateFile(file_info) => {
                     upsert_file_batch.push(file_info); // Upsert handles both insert and update
                     if upsert_file_batch.len() >= self.config.batch_size {
-                        self.execute_insert_batch(&mut upsert_file_batch, &mut report)
+                        self.execute_upsert_file_batch(&mut upsert_file_batch, &mut report)
                             .await;
                     }
                 }
@@ -163,10 +178,17 @@ impl DirectoryScanner {
                             .await;
                     }
                 }
-                SyncOperation::Delete(path) => {
-                    delete_batch.push(path);
-                    if delete_batch.len() >= self.config.batch_size {
-                        self.execute_delete_batch(&mut delete_batch, &mut report)
+                SyncOperation::DeleteFile(path) => {
+                    delete_file_batch.push(path);
+                    if delete_file_batch.len() >= self.config.batch_size {
+                        self.execute_delete_file_batch(&mut delete_file_batch, &mut report)
+                            .await;
+                    }
+                }
+                SyncOperation::DeleteFolder(path) => {
+                    delete_folder_batch.push(path);
+                    if delete_folder_batch.len() >= self.config.batch_size {
+                        self.execute_delete_folder_batch(&mut delete_folder_batch, &mut report)
                             .await;
                     }
                 }
@@ -175,22 +197,42 @@ impl DirectoryScanner {
 
         // Execute remaining batches
         if !upsert_file_batch.is_empty() {
-            self.execute_insert_batch(&mut upsert_file_batch, &mut report)
-                .await;
-        }
-        if !delete_batch.is_empty() {
-            self.execute_delete_batch(&mut delete_batch, &mut report)
+            self.execute_upsert_file_batch(&mut upsert_file_batch, &mut report)
                 .await;
         }
 
+        if !upsert_folder_batch.is_empty() {
+            self.execute_upsert_folder_batch(&mut upsert_folder_batch, &mut report)
+                .await;
+        }
+
+        if !delete_file_batch.is_empty() {
+            self.execute_delete_file_batch(&mut delete_file_batch, &mut report)
+                .await;
+        }
+
+        if !delete_folder_batch.is_empty() {
+            self.execute_delete_folder_batch(&mut delete_file_batch, &mut report)
+                .await;
+        }
         report.duration = start_time.elapsed();
 
         println!("Directory sync completed in {:?}", report.duration);
         println!(
-            "Results: {} inserted, {} updated, {} deleted, {} errors",
+            r"Results: 
+            {} files inserted,
+            {} folders inserted,
+            {} files updated, 
+            {} folders updated, 
+            {} files deleted, 
+            {} folders deleted, 
+            {} errors",
             report.files_inserted,
+            report.folders_inserted,
             report.files_updated,
+            report.folders_updated,
             report.files_deleted,
+            report.folders_deleted,
             report.errors.len()
         );
 
@@ -216,7 +258,7 @@ impl DirectoryScanner {
         dir_path: &Path,
         files: &mut Vec<FileInfo>,
         folders: &mut Vec<FolderInfo>,
-    ) -> Result<(), AppError> {
+    ) -> Result<(), FileError> {
         //TODO: Also need to add the root directory, which then could be one of the only ones, that
         //does not have a parent_folder_id
         let mut entries = match fs::read_dir(dir_path).await {
@@ -244,7 +286,7 @@ impl DirectoryScanner {
 
                 //TODO: Also need to add all of the folders, recurse into them and add all folders
                 //into database.
-                match self.create_folder_info(&path).await {
+                match FolderInfo::create_folder_info(&path).await {
                     Ok(folder_info) => folders.push(folder_info),
                     Err(e) => {
                         return Err(e);
@@ -274,7 +316,7 @@ impl DirectoryScanner {
                 }
 
                 // Process the file
-                match self.create_file_info(&path).await {
+                match FileInfo::create_file_info(&path).await {
                     Ok(file_info) => files.push(file_info),
                     Err(e) => {
                         eprintln!("Failed to process file {}: {:?}", path.display(), e);
@@ -287,80 +329,10 @@ impl DirectoryScanner {
         Ok(())
     }
 
-    /// Create FileInfo from a filesystem path
-    async fn create_file_info(&self, path: &Path) -> Result<FileInfo, AppError> {
-        let metadata = fs::metadata(path)
-            .await
-            .map_err(|e| AppError::Categorized {
-                kind: crate::errors::AppErrorKind::FileError,
-                message: format!("Failed to get file metadata: {}", e),
-                source: Some(Box::new(e)),
-            })?;
-
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-
-        // Calculate file hash using sophisticated algorithm
-        let file_hash = FileHash::hash(path).await?;
-        let content_hash_str = format!("{:?}", file_hash.content_hash);
-        let identity_hash_str = format!("{:?}", file_hash.identity_hash);
-
-        // Detect file type
-        let file_type_name = self.detect_file_type(path);
-
-        Ok(FileInfo {
-            path: path.to_path_buf(),
-            name,
-            content_hash: content_hash_str,
-            identity_hash: identity_hash_str,
-            file_type_name,
-            file_system_id: None, // Will be set during database operations
-        })
-    }
-
-    /// Create FolderInfo from a filesystem path
-    async fn create_folder_info(&self, path: &Path) -> Result<FolderInfo, AppError> {
-        let metadata = fs::metadata(path)
-            .await
-            .map_err(|e| AppError::Categorized {
-                kind: crate::errors::AppErrorKind::FileError,
-                message: format!("Failed to get file metadata: {}", e),
-                source: Some(Box::new(e)),
-            })?;
-
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-
-        // Calculate file hash using sophisticated algorithm
-        let folder_hash = FolderHash::hash(path).await?;
-        let content_hash_str = format!("{:?}", folder_hash.content_hash);
-        let identity_hash_str = format!("{:?}", folder_hash.identity_hash);
-        let structure_hash_str = format!("{:?}", folder_hash.structure_hash);
-
-        // Detect file type
-        let file_type_name = self.detect_file_type(path);
-
-        Ok(FolderInfo {
-            path: path.to_path_buf(),
-            name,
-            content_hash: content_hash_str,
-            identity_hash: identity_hash_str,
-            structure_hash: structure_hash_str,
-            file_system_id: None,   // Will be set during database operations
-            parent_folder_id: None, // Will be set during database operations
-        })
-    }
-
     /// Calculate what operations need to be performed
     fn calculate_file_sync_operations(
         &self,
-        db_state: HashMap<PathBuf, FileMetadata>,
+        db_state: &HashMap<PathBuf, FileMetadata>,
         fs_files: Vec<FileInfo>,
     ) -> Vec<SyncOperation> {
         let mut operations = Vec::new();
@@ -389,8 +361,8 @@ impl DirectoryScanner {
 
         // Check for files in database that no longer exist in filesystem
         for (db_path, _) in db_state {
-            if !processed_paths.contains(&db_path) {
-                operations.push(SyncOperation::Delete(db_path));
+            if !processed_paths.contains(db_path) {
+                operations.push(SyncOperation::DeleteFile(db_path.to_owned()));
             }
         }
 
@@ -399,7 +371,7 @@ impl DirectoryScanner {
 
     fn calculate_folder_sync_operations(
         &self,
-        db_state: HashMap<PathBuf, FileMetadata>,
+        db_state: &HashMap<PathBuf, FileMetadata>,
         fs_folders: Vec<FolderInfo>,
     ) -> Vec<SyncOperation> {
         let mut operations = Vec::new();
@@ -428,8 +400,8 @@ impl DirectoryScanner {
 
         // Check for files in database that no longer exist in filesystem
         for (db_path, _) in db_state {
-            if !processed_paths.contains(&db_path) {
-                operations.push(SyncOperation::Delete(db_path));
+            if !processed_paths.contains(db_path) {
+                operations.push(SyncOperation::DeleteFile(db_path.to_owned()));
             }
         }
 
@@ -437,15 +409,51 @@ impl DirectoryScanner {
     }
 
     /// Execute a batch of insert/update operations
-    async fn execute_insert_batch(&self, batch: &mut Vec<FileInfo>, report: &mut SyncReport) {
+    async fn execute_upsert_file_batch(&self, batch: &mut Vec<FileInfo>, report: &mut SyncReport) {
         if batch.is_empty() {
             return;
         }
 
         match self.file_operations.batch_upsert_files(batch.clone()).await {
-            Ok(count) => {
-                report.files_inserted += count; // Note: this includes both inserts and updates
-                println!("Successfully processed batch of {} files", count);
+            Ok(file_report) => {
+                report.files_inserted += file_report.file_inserted; // Note: this includes both inserts and updates
+                report.files_updated += file_report.file_updated; // Note: this includes both inserts and updates
+                println!(
+                    "Successfully processed batch of {} files",
+                    file_report.file_inserted + file_report.file_updated
+                );
+            }
+            Err(e) => {
+                let error_msg = format!("Failed to execute insert batch: {:?}", e);
+                report.errors.push(error_msg);
+                eprintln!("Batch insert failed: {:?}", e);
+            }
+        }
+
+        batch.clear();
+    }
+
+    async fn execute_upsert_folder_batch(
+        &self,
+        batch: &mut Vec<FolderInfo>,
+        report: &mut SyncReport,
+    ) {
+        if batch.is_empty() {
+            return;
+        }
+
+        match self
+            .file_operations
+            .batch_upsert_folders(batch.clone())
+            .await
+        {
+            Ok(folder_report) => {
+                report.folders_inserted += folder_report.folder_inserted;
+                report.folders_updated += folder_report.folder_updated;
+                println!(
+                    "Successfully processed batch of {} files",
+                    folder_report.folder_inserted + folder_report.folder_updated
+                );
             }
             Err(e) => {
                 let error_msg = format!("Failed to execute insert batch: {:?}", e);
@@ -458,7 +466,7 @@ impl DirectoryScanner {
     }
 
     /// Execute a batch of delete operations
-    async fn execute_delete_batch(&self, batch: &mut Vec<PathBuf>, report: &mut SyncReport) {
+    async fn execute_delete_file_batch(&self, batch: &mut Vec<PathBuf>, report: &mut SyncReport) {
         if batch.is_empty() {
             return;
         }
@@ -478,67 +486,28 @@ impl DirectoryScanner {
         batch.clear();
     }
 
-    /// Detect file type based on file extension (reusing logic from FileOperations)
-    fn detect_file_type(&self, file_path: &Path) -> String {
-        match file_path.extension().and_then(|ext| ext.to_str()) {
-            Some(ext) => {
-                let ext_lower = ext.to_lowercase();
-                match ext_lower.as_str() {
-                    // Document types
-                    "md" | "markdown" => "markdown",
-                    "txt" => "text",
-                    "pdf" => "pdf",
-                    "doc" | "docx" => "document",
-                    "xls" | "xlsx" => "spreadsheet",
-                    "ppt" | "pptx" => "presentation",
+    /// Execute a batch of delete operations
+    async fn execute_delete_folder_batch(&self, batch: &mut Vec<PathBuf>, report: &mut SyncReport) {
+        if batch.is_empty() {
+            return;
+        }
 
-                    // Image types
-                    "jpg" | "jpeg" => "image_jpeg",
-                    "png" => "image_png",
-                    "gif" => "image_gif",
-                    "svg" => "image_svg",
-                    "webp" => "image_webp",
-                    "bmp" => "image_bmp",
-
-                    // Video types
-                    "mp4" | "avi" | "mkv" | "mov" | "wmv" | "flv" => "video",
-
-                    // Audio types
-                    "mp3" | "wav" | "flac" | "ogg" | "aac" => "audio",
-
-                    // Code types
-                    "rs" => "rust",
-                    "js" | "ts" => "javascript",
-                    "py" => "python",
-                    "java" => "java",
-                    "cpp" | "cc" | "cxx" => "cpp",
-                    "c" => "c",
-                    "h" | "hpp" => "header",
-                    "html" | "htm" => "html",
-                    "css" => "css",
-                    "json" => "json",
-                    "xml" => "xml",
-                    "yaml" | "yml" => "yaml",
-                    "toml" => "toml",
-
-                    // Archive types
-                    "zip" | "rar" | "7z" | "tar" | "gz" | "bz2" => "archive",
-
-                    // Default
-                    _ => {
-                        return format!("ext_{}", ext_lower);
-                    }
-                }
-                .to_string()
+        match self
+            .file_operations
+            .batch_delete_folders(batch.clone())
+            .await
+        {
+            Ok(count) => {
+                report.folders_deleted += count;
+                println!("Successfully deleted {} files from database", count);
             }
-            None => {
-                // Check if it's a directory
-                if file_path.is_dir() {
-                    "directory".to_string()
-                } else {
-                    "unknown".to_string()
-                }
+            Err(e) => {
+                let error_msg = format!("Failed to execute delete batch: {:?}", e);
+                report.errors.push(error_msg);
+                eprintln!("Batch delete failed: {:?}", e);
             }
         }
+
+        batch.clear();
     }
 }

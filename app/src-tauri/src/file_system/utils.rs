@@ -1,0 +1,166 @@
+use crate::{
+    errors::{FileError, FileErrorKind},
+    file_system::{FileHash, FolderHash},
+};
+use serde::{Deserialize, Serialize};
+
+use std::path::{Path, PathBuf};
+
+use entity::{files, folders};
+
+#[derive(Debug, Clone)]
+pub struct FileInfo {
+    pub path: PathBuf,
+    pub name: String,
+    pub content_hash: String,
+    pub identity_hash: String,
+    pub file_type_name: String,
+    pub file_system_id: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FolderInfo {
+    pub path: PathBuf,
+    pub name: String,
+    pub content_hash: String,
+    pub identity_hash: String,
+    pub structure_hash: String,
+    pub file_system_id: Option<i32>,
+    pub parent_folder_id: Option<i32>,
+}
+
+impl FileInfo {
+    /// Create FileInfo from a filesystem path
+    pub async fn create_file_info(path: &Path) -> Result<FileInfo, FileError> {
+        let metadata = std::fs::metadata(path).map_err(|e| {
+            FileError::with_source(
+                FileErrorKind::Io,
+                format!("Failed to get file metadata: {}", e),
+                e,
+                Some(vec![path.to_path_buf()]),
+            )
+        })?;
+
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        // Calculate file hash using sophisticated algorithm
+        let file_hash = FileHash::hash(path).await?;
+        let content_hash_str = format!("{:?}", file_hash.content_hash);
+        let identity_hash_str = format!("{:?}", file_hash.identity_hash);
+
+        // Detect file type
+        let file_type_name = Self::detect_file_type(path);
+
+        Ok(FileInfo {
+            path: path.to_path_buf(),
+            name,
+            content_hash: content_hash_str,
+            identity_hash: identity_hash_str,
+            file_type_name,
+            file_system_id: None, // Will be set during database operations
+        })
+    }
+
+    fn detect_file_type(file_path: &Path) -> String {
+        match file_path.extension().and_then(|ext| ext.to_str()) {
+            Some(ext) => {
+                let ext_lower = ext.to_lowercase();
+                match ext_lower.as_str() {
+                    // Document types
+                    "md" | "markdown" => "markdown",
+                    "txt" => "text",
+                    "pdf" => "pdf",
+                    "doc" | "docx" => "document",
+                    "xls" | "xlsx" => "spreadsheet",
+                    "ppt" | "pptx" => "presentation",
+
+                    // Image types
+                    "jpg" | "jpeg" => "image_jpeg",
+                    "png" => "image_png",
+                    "gif" => "image_gif",
+                    "svg" => "image_svg",
+                    "webp" => "image_webp",
+                    "bmp" => "image_bmp",
+
+                    // Video types
+                    "mp4" | "avi" | "mkv" | "mov" | "wmv" | "flv" => "video",
+
+                    // Audio types
+                    "mp3" | "wav" | "flac" | "ogg" | "aac" => "audio",
+
+                    // Code types
+                    "rs" => "rust",
+                    "js" | "ts" => "javascript",
+                    "py" => "python",
+                    "java" => "java",
+                    "cpp" | "cc" | "cxx" => "cpp",
+                    "c" => "c",
+                    "h" | "hpp" => "header",
+                    "html" | "htm" => "html",
+                    "css" => "css",
+                    "json" => "json",
+                    "xml" => "xml",
+                    "yaml" | "yml" => "yaml",
+                    "toml" => "toml",
+
+                    // Archive types
+                    "zip" | "rar" | "7z" | "tar" | "gz" | "bz2" => "archive",
+
+                    // Default
+                    _ => {
+                        return format!("ext_{}", ext_lower);
+                    }
+                }
+                .to_string()
+            }
+            None => {
+                // Check if it's a directory
+                if file_path.is_dir() {
+                    "directory".to_string()
+                } else {
+                    "unknown".to_string()
+                }
+            }
+        }
+    }
+}
+
+impl FolderInfo {
+    /// Create FolderInfo from a filesystem path
+    pub async fn create_folder_info(path: &Path) -> Result<FolderInfo, FileError> {
+        let metadata = std::fs::metadata(path).map_err(|e| {
+            FileError::with_source(
+                FileErrorKind::Io,
+                format!("Failed to get file metadata!"),
+                e,
+                Some(vec![path.to_path_buf()]),
+            )
+        })?;
+
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        // Calculate file hash using sophisticated algorithm
+        let folder_hash = FolderHash::hash(path).await?;
+        let content_hash_str = format!("{:?}", folder_hash.content_hash);
+        let identity_hash_str = format!("{:?}", folder_hash.identity_hash);
+        let structure_hash_str = format!("{:?}", folder_hash.structure_hash);
+
+        Ok(FolderInfo {
+            path: path.to_path_buf(),
+            name,
+            content_hash: content_hash_str,
+            identity_hash: identity_hash_str,
+            structure_hash: structure_hash_str,
+            file_system_id: None,   // Will be set during database operations
+            parent_folder_id: None, // Will be set during database operations
+        })
+    }
+}

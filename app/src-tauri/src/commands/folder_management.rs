@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use async_recursion::async_recursion;
-use sea_orm::PaginatorTrait;
+use sea_orm::{ConnectionTrait, DatabaseConnection, PaginatorTrait};
 use std::path::{Path, PathBuf};
 use tokio::sync::Mutex;
 
@@ -36,7 +36,7 @@ impl From<folders::Model> for FolderInfo {
             id: folder.id,
             name: folder.name,
             path: folder.path,
-            parent_folder_id: Some(folder.parent_folder_id),
+            parent_folder_id: folder.parent_folder_id,
             content_hash: folder.content_hash,
             identity_hash: folder.identity_hash,
             structure_hash: folder.structure_hash,
@@ -205,7 +205,7 @@ pub async fn get_files_in_folder(
 }
 
 /// Get folder tree structure starting from a root folder
-#[command]
+#[tauri::command]
 pub async fn get_folder_tree(
     app_state: State<'_, Mutex<AppState>>,
     root_folder_id: Option<i32>,
@@ -224,7 +224,8 @@ pub async fn get_folder_tree(
     } else {
         let result = {
             let state = app_state.lock().await;
-            state.file_operations.find_root_folders().await
+            let con: Option<DatabaseConnection> = None;
+            state.file_operations.find_root_folders(con.as_ref()).await
         };
         match result {
             Ok(folders) => folders,
@@ -437,7 +438,7 @@ pub async fn get_folder_path_hierarchy(
             .await
         {
             Ok(Some(folder)) => {
-                current_folder_id = Some(folder.parent_folder_id);
+                current_folder_id = folder.parent_folder_id;
                 hierarchy.push(folder.into());
             }
             Ok(None) => break,

@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use thiserror::Error;
 
+use crate::errors::{HashError, HashErrorKind};
+
 #[derive(Debug, Error)]
 pub struct FileError {
     pub kind: crate::errors::FileErrorKind,
@@ -62,6 +64,23 @@ impl From<notify::Error> for FileError {
             message: format!("Notify has encontered an error!"),
             paths: Some(other.paths.clone()),
             source: Some(Box::new(other)),
+        }
+    }
+}
+
+impl From<HashError> for FileError {
+    fn from(value: HashError) -> Self {
+        let error_kind = match value.kind {
+            HashErrorKind::IoError => FileErrorKind::Io,
+            HashErrorKind::InvalidPathError => FileErrorKind::PathNotFoundError,
+            HashErrorKind::PermissionDeniedError => FileErrorKind::InvalidConfigError,
+        };
+
+        FileError {
+            kind: error_kind,
+            message: format!("The hash algorithm has been encountered an error!"),
+            source: value.source,
+            paths: None,
         }
     }
 }

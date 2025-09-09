@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use serde::Serialize;
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 use tokio::sync::Mutex;
@@ -7,10 +9,23 @@ use tracing::info;
 
 use crate::config::app::AppState;
 use crate::config::library::{Library, LibraryConfig, LibraryPathConfig};
+use crate::data::commands::watched_folders::WatchedFolders;
 use crate::errors::{LibraryError, LibraryErrorKind};
 use crate::file_system::FileWatcherMessage;
 use crate::utils;
 use tauri::State;
+
+#[tauri::command]
+pub async fn get_watched_folders(
+    app_state: State<'_, Mutex<AppState>>,
+) -> Result<HashMap<String, WatchedFolders>, LibraryError> {
+    info!("Getting watched folders");
+    {
+        let mut state = app_state.lock().await;
+
+        Ok(state.get_watched_folders_map().await?)
+    }
+}
 
 #[tauri::command]
 pub async fn get_library_paths(
@@ -137,9 +152,15 @@ pub async fn initialize_library_workspace(
     {
         let mut state = app_state.lock().await;
 
+        info!("Running migrations...");
         // Run database migrations
         state.run_migrations().await?;
 
+        info!("Trying to upsert root folders!");
+        // Upsert root folders
+        state.upsert_root_folders().await?;
+
+        info!("Scanning library directories");
         // Perform initial directory scan
         state.scan_library_directories().await?;
 

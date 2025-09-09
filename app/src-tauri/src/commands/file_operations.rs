@@ -54,7 +54,6 @@ impl From<files::Model> for FileInfo {
         }
     }
 }
-
 /// Scan a directory and sync files to database
 #[command]
 pub async fn scan_directory(

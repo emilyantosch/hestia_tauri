@@ -38,7 +38,7 @@ impl MigrationTrait for Migration {
                     .col(string(Folders::IdentityHash))
                     .col(string(Folders::StructureHash))
                     .col(integer(Folders::FileSystemId))
-                    .col(integer(Folders::ParentFolderId).null())
+                    .col(integer_null(Folders::ParentFolderId))
                     .col(string(Folders::Name))
                     .col(string(Folders::Path))
                     .col(date_time(Folders::CreatedAt))
@@ -83,7 +83,11 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         // Drop index first
         manager
-            .drop_index(Index::drop().name("idx_folders_id_filesystem_parent").to_owned())
+            .drop_index(
+                Index::drop()
+                    .name("idx_folders_id_filesystem_parent")
+                    .to_owned(),
+            )
             .await?;
 
         // Drop Folders table (foreign keys will be dropped automatically)
