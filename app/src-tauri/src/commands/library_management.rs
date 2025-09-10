@@ -9,23 +9,11 @@ use tracing::info;
 
 use crate::config::app::AppState;
 use crate::config::library::{Library, LibraryConfig, LibraryPathConfig};
-use crate::data::commands::watched_folders::WatchedFolders;
+use crate::data::commands::watched_folders::WatchedFolderTree;
 use crate::errors::{LibraryError, LibraryErrorKind};
 use crate::file_system::FileWatcherMessage;
 use crate::utils;
 use tauri::State;
-
-#[tauri::command]
-pub async fn get_watched_folders(
-    app_state: State<'_, Mutex<AppState>>,
-) -> Result<HashMap<String, WatchedFolders>, LibraryError> {
-    info!("Getting watched folders");
-    {
-        let mut state = app_state.lock().await;
-
-        Ok(state.get_watched_folders_map().await?)
-    }
-}
 
 #[tauri::command]
 pub async fn get_library_paths(

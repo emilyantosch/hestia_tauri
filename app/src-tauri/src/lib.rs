@@ -115,7 +115,6 @@ pub fn run() {
             commands::folder_management::get_root_folders,
             commands::folder_management::get_subfolders,
             commands::folder_management::get_files_in_folder,
-            commands::folder_management::get_folder_tree,
             commands::folder_management::get_folder_summary,
             commands::folder_management::search_folders_by_name,
             commands::folder_management::get_folder_path_hierarchy,

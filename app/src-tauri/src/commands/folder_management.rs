@@ -1,58 +1,34 @@
 #![allow(dead_code)]
 use async_recursion::async_recursion;
 use sea_orm::{ConnectionTrait, DatabaseConnection, PaginatorTrait};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::{command, State};
 
+use tracing::info;
+
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set};
 
 use super::file_operations::FileInfo;
-use crate::config::app::AppState;
-use crate::errors::file;
+use crate::data::folder_info::FolderInfo;
+use crate::data::watched_folders::WatchedFolderTree;
+use crate::{config::app::AppState, errors::DbError};
 
 use entity::{files, folders, prelude::*};
 
-/// Folder information for frontend display
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FolderInfo {
-    pub id: i32,
-    pub name: String,
-    pub path: String,
-    pub parent_folder_id: Option<i32>,
-    pub content_hash: String,
-    pub identity_hash: String,
-    pub structure_hash: String,
-    pub file_system_id: i32,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-impl From<folders::Model> for FolderInfo {
-    fn from(folder: folders::Model) -> Self {
-        Self {
-            id: folder.id,
-            name: folder.name,
-            path: folder.path,
-            parent_folder_id: folder.parent_folder_id,
-            content_hash: folder.content_hash,
-            identity_hash: folder.identity_hash,
-            structure_hash: folder.structure_hash,
-            file_system_id: folder.file_system_id,
-            created_at: folder.created_at.to_string(),
-            updated_at: folder.updated_at.to_string(),
-        }
+/// Get all folder and subfolders being watched for the frontend to display
+#[tauri::command]
+pub async fn get_watched_folders(
+    app_state: State<'_, Mutex<AppState>>,
+) -> Result<HashMap<String, WatchedFolderTree>, DbError> {
+    info!("Getting watched folders");
+    {
+        let state = app_state.lock().await;
+        state.get_watched_folders_map().await
     }
-}
-
-/// Folder structure with children
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FolderTree {
-    pub folder: FolderInfo,
-    pub children: Vec<FolderTree>,
-    pub files: Vec<FileInfo>,
 }
 
 /// Folder content summary
@@ -202,112 +178,6 @@ pub async fn get_files_in_folder(
         }
         Err(e) => Err(format!("Failed to get files in folder: {}", e)),
     }
-}
-
-/// Get folder tree structure starting from a root folder
-#[tauri::command]
-pub async fn get_folder_tree(
-    app_state: State<'_, Mutex<AppState>>,
-    root_folder_id: Option<i32>,
-) -> Result<Vec<FolderTree>, String> {
-    // Get root folders if no specific root is provided
-    let root_folders = if let Some(root_id) = root_folder_id {
-        let result = {
-            let state = app_state.lock().await;
-            state.file_operations.find_folder_by_id(root_id).await
-        };
-        match result {
-            Ok(Some(folder)) => vec![folder],
-            Ok(None) => return Err("Root folder not found".to_string()),
-            Err(e) => return Err(format!("Failed to get root folder: {}", e)),
-        }
-    } else {
-        let result = {
-            let state = app_state.lock().await;
-            let con: Option<DatabaseConnection> = None;
-            state.file_operations.find_root_folders(con.as_ref()).await
-        };
-        match result {
-            Ok(folders) => folders,
-            Err(e) => return Err(format!("Failed to get root folders: {}", e)),
-        }
-    };
-
-    // Build tree for each root folder
-    let mut trees = Vec::new();
-    for root_folder in root_folders {
-        match build_folder_tree(&app_state, root_folder).await {
-            Ok(tree) => trees.push(tree),
-            Err(e) => return Err(format!("Failed to build folder tree: {}", e)),
-        }
-    }
-    Ok(trees)
-}
-
-/// Recursive function to build folder tree
-#[async_recursion]
-async fn build_folder_tree(
-    app_state: &State<'_, Mutex<AppState>>,
-    folder: folders::Model,
-) -> Result<FolderTree, String> {
-    let folder_id = folder.id;
-    let folder_path = folder.path.clone();
-
-    // Get subfolders
-    let subfolders = {
-        let state = app_state.lock().await;
-        match state
-            .file_operations
-            .find_subfolders_of_folder(folder_id)
-            .await
-        {
-            Ok(subfolder) => subfolder,
-            Err(e) => return Err(format!("Failed to get subfolders: {}", e)),
-        }
-    };
-
-    // Build trees for subfolders
-    let mut children = Vec::new();
-    for subfolder in subfolders {
-        match build_folder_tree(app_state, subfolder).await {
-            Ok(child_tree) => children.push(child_tree),
-            Err(e) => return Err(format!("Failed to build child tree: {}", e)),
-        }
-    }
-
-    // Get files in this folder
-    let folder_path_path = Path::new(&folder_path);
-    let files_result = {
-        let state = app_state.lock().await;
-        state
-            .file_operations
-            .get_files_in_directory(folder_path_path)
-            .await
-    };
-    let files = match files_result {
-        Ok(files) => {
-            // Filter to only include direct children
-            files
-                .into_iter()
-                .filter(|file| {
-                    let file_path = PathBuf::from(&file.path);
-                    if let Some(parent) = file_path.parent() {
-                        parent == folder_path_path
-                    } else {
-                        false
-                    }
-                })
-                .map(|f| f.into())
-                .collect()
-        }
-        Err(e) => return Err(format!("Failed to get files in folder: {}", e)),
-    };
-
-    Ok(FolderTree {
-        folder: folder.into(),
-        children,
-        files,
-    })
 }
 
 /// Get folder summary with statistics

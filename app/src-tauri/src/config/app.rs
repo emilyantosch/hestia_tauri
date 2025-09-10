@@ -1,11 +1,12 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::mpsc;
 use tracing::{error, info};
 
 use crate::{
     config::library::Library,
+    data::watched_folders::WatchedFolderTree,
     database::{DatabaseManager, FileOperations},
-    errors::{LibraryError, LibraryErrorKind},
+    errors::{DbError, LibraryError, LibraryErrorKind},
     file_system::{
         DatabaseFileWatcherEventHandler, DirectoryScanner, FileWatcher, FileWatcherHandler,
     },
@@ -170,6 +171,11 @@ impl AppState {
         Ok(())
     }
 
+    pub async fn get_watched_folders_map(
+        &self,
+    ) -> Result<HashMap<String, WatchedFolderTree>, DbError> {
+        self.file_operations.get_watched_folder_map().await
+    }
     /// Get library paths for scanning
     pub fn get_library_paths(&self) -> Vec<std::path::PathBuf> {
         match &self.library.library_config {

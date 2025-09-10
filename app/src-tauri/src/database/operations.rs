@@ -6,13 +6,13 @@ use tracing::{event, info, instrument};
 
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction,
-    EntityOrSelect, EntityTrait, IntoActiveModel, QueryFilter, Set, TransactionTrait,
+    EntityOrSelect, EntityTrait, IntoActiveModel, QueryFilter, QuerySelect, Set, TransactionTrait,
 };
 use tokio::sync::RwLock;
 
 use entity::{file_system_identifier, file_types, files, folders, prelude::*};
 
-use crate::data::commands::watched_folders::WatchedFolders;
+use crate::data::commands::watched_folders::WatchedFolderTree;
 use crate::file_system::utils::{FileInfo, FolderInfo};
 
 use crate::database::DatabaseManager;
@@ -721,18 +721,48 @@ impl FileOperations {
         Ok(hashes)
     }
 
-    pub async fn get_watched_folder_map(&self) -> Result<HashMap<String, WatchedFolders>, DbError> {
-        let map = HashMap::new();
+    pub async fn get_watched_folder_map(
+        &self,
+    ) -> Result<HashMap<String, WatchedFolderTree>, DbError> {
+        let mut map = HashMap::new();
 
         let transaction = self.database_manager.get_connection().begin().await?;
         let folders = Folders::find().all(&transaction).await?;
-        for folder in folders {
+
+        let (with_parent, without_parent): (Vec<folders::Model>, Vec<folders::Model>) = folders
+            .into_iter()
+            .partition(|model| model.parent_folder_id.is_some());
+
+        let root_children = without_parent
+            .into_iter()
+            .map(|model| model.id.to_string())
+            .collect();
+        let root = WatchedFolderTree::with(
+            "".to_string(),
+            "".to_string(),
+            Some(root_children),
+            None,
+            None,
+        );
+        map.insert("0".to_string(), root);
+        info!("First map value inserted {map:#?}");
+
+        for folder in with_parent {
             let children = Folders::find()
+                .select_only()
+                .column(folders::Column::Id)
                 .filter(folders::Column::ParentFolderId.eq(folder.id))
                 .all(&transaction)
                 .await?;
-            let wf = WatchedFolders::new(folder.name, folder.path);
+            let children_array: Option<Vec<String>> = if children.is_empty() {
+                None
+            } else {
+                Some(children.into_iter().map(|v| v.id.to_string()).collect())
+            };
+            let wf = WatchedFolderTree::with(folder.name, folder.path, children_array, None, None);
+            map.insert(folder.id.to_string(), wf);
         }
+        info!("Complete map {map:#?}");
         Ok(map)
     }
 
