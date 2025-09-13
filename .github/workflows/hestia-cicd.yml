@@ -55,6 +55,19 @@ jobs: #can run in parallel when creating seperate jobs
       contents: read #---deno---
 
     steps:
+      - name: Install system dependencies for ubuntu # tauri v2 https://tauri.app/start/prerequisites/
+        run: |
+          sudo apt update
+          sudo apt install libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
       - name: Setup repo
         uses: actions/checkout@v4
 
