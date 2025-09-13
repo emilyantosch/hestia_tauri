@@ -29,12 +29,15 @@ jobs: #can run in parallel when creating seperate jobs
         run: cargo check --manifest-path=./app/Cargo.toml --verbose
 
       - name: cargo-build
+        if: always()
         run: cargo build --manifest-path=./app/Cargo.toml --verbose
 
       - name: cargo-test
+        if: always()
         run: cargo test --manifest-path=./app/Cargo.toml --verbose
+
   deno-build:
-    name: cargo-build-and-test
+    name: deno-build-and-test
     runs-on: ubuntu-latest
     # runs-on: [ ubuntu-latest, windows-latest, macos-latest ]
 
@@ -52,12 +55,14 @@ jobs: #can run in parallel when creating seperate jobs
         run: deno fmt --check
 
       - name: Run linter
+        if: always()
         run: deno lint
 
-        # - name: Run tests
-        #   run: |
-        #     cd ./app
-        #     deno run tauri dev
+      - name: Run tests
+        if: always()
+        run: |
+          cd ./app
+          deno run tauri dev
 
 # name: deno
 #
