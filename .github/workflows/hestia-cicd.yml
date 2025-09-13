@@ -23,7 +23,18 @@ jobs: #can run in parallel when creating seperate jobs
       - uses: actions/checkout@v4
 
       - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev pkg-config libgdk-3-dev
+        # run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev pkg-config libgdk-3-dev
+        run: |
+          sudo apt update
+          sudo apt install libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
 
         # name: cargo-version
         # run: |
