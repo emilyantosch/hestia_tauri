@@ -3,7 +3,7 @@ name: rust
 
 on:
   push:
-  branches: [ "main", "dev", "test", "cicd" ]
+    branches: [ "main", "dev", "test", "cicd" ]
   pull_request:
     branches: ["main", "dev", "test"]
 
