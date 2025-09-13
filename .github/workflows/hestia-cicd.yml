@@ -11,7 +11,7 @@ permissions:
   contents: read #---deno---
 
 jobs: #can run in parallel when creating seperate jobs
-  hestia-build:
+  hestia-build-linux:
     name: hestia build
     runs-on: ubuntu-latest
     env:
@@ -33,7 +33,13 @@ jobs: #can run in parallel when creating seperate jobs
             libxdo-dev \
             libssl-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            xvfb  # For launching gui apps in cicd
+
+      - name: Start Xvfb - virtual frame buffer
+        run: |
+          Xvfb :99 -screen 0 1920x1080x24 &
+          export DISPLAY=:99  # Set the DISPLAY environment variable
 
       - name: Install deno
         uses: denoland/setup-deno@v2
@@ -53,7 +59,7 @@ jobs: #can run in parallel when creating seperate jobs
         run: cargo check --manifest-path=./app/Cargo.toml --verbose
 
       - name: cargo build
-        if: always() #runs even if prior test failed
+        # if: always() #runs even if prior test failed
         run: cargo build --manifest-path=./app/Cargo.toml --verbose
 
       - name: cargo test
@@ -65,11 +71,11 @@ jobs: #can run in parallel when creating seperate jobs
         if: always()
         run: deno fmt --check
 
-      - name: deno run linter
+      - name: deno linter
         if: always()
         run: deno lint
 
-      - name: Run tests
+      - name: deno run
         if: always()
         run: |
           cd ./app
@@ -78,3 +84,111 @@ jobs: #can run in parallel when creating seperate jobs
     # steps:
     #   - name: trivy checks
 
+# # jobs for macos and windows, (not tested yet) are inactive for now to save minutes
+#   hestia-build-macos:
+#     name: hestia build
+#     runs-on: macos-latest
+#     env:
+#       CARGO_TERM_COLOR: always
+#     # runs-on: [ ubuntu-latest, windows-latest, macos-latest ]
+#
+#     steps:
+#       - name: Setup cicd repo
+#         uses: actions/checkout@v4
+#
+#       - name: Install deno
+#         uses: denoland/setup-deno@v2
+#         with:
+#           deno-version: v2.x
+#
+#       - name: Initilize deno dev environment
+#         run: |
+#           cd ./app
+#           deno install
+#
+#       - name: cargo version
+#         run: |
+#           echo "cargo version in use: $(cargo --version)"
+#
+#       - name: cargo check
+#         run: cargo check --manifest-path=./app/Cargo.toml --verbose
+#
+#       - name: cargo build
+#         # if: always() #runs even if prior test failed
+#         run: cargo build --manifest-path=./app/Cargo.toml --verbose
+#
+#       - name: cargo test
+#         if: always()
+#         run: cargo test --manifest-path=./app/Cargo.toml --verbose
+#
+#       # Uncomment this step to verify the use of 'deno fmt' on each commit.
+#       - name: deno verify formatting
+#         if: always()
+#         run: deno fmt --check
+#
+#       - name: deno run linter
+#         if: always()
+#         run: deno lint
+#
+#       - name: Run tests
+#         if: always()
+#         run: |
+#           cd ./app
+#           deno task tauri dev
+#           # deno test tauri dev
+#     # steps:
+#     #   - name: trivy checks
+#
+#   hestia-build-windows:
+#     name: hestia build
+#     runs-on: windows-latest
+#     env:
+#       CARGO_TERM_COLOR: always
+#
+#     steps:
+#       - name: Setup cicd repo
+#         uses: actions/checkout@v4
+#
+#       - name: Install deno
+#         uses: denoland/setup-deno@v2
+#         with:
+#           deno-version: v2.x
+#
+#       - name: Initilize deno dev environment
+#         run: |
+#           cd ./app
+#           deno install
+#
+#       - name: cargo version
+#         run: |
+#           echo "cargo version in use: $(cargo --version)"
+#
+#       - name: cargo check
+#         run: cargo check --manifest-path=./app/Cargo.toml --verbose
+#
+#       - name: cargo build
+#         # if: always() #runs even if prior test failed
+#         run: cargo build --manifest-path=./app/Cargo.toml --verbose
+#
+#       - name: cargo test
+#         if: always()
+#         run: cargo test --manifest-path=./app/Cargo.toml --verbose
+#
+#       # Uncomment this step to verify the use of 'deno fmt' on each commit.
+#       - name: deno verify formatting
+#         if: always()
+#         run: deno fmt --check
+#
+#       - name: deno run linter
+#         if: always()
+#         run: deno lint
+#
+#       - name: Run tests
+#         if: always()
+#         run: |
+#           cd ./app
+#           deno task tauri dev
+#           # deno test tauri dev
+#     # steps:
+#     #   - name: trivy checks
+#
