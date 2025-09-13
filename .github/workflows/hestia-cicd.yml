@@ -16,6 +16,9 @@ jobs: #can run in parallel when creating seperate jobs
     runs-on: ubuntu-latest
     env:
       CARGO_TERM_COLOR: always
+      GTK_DEBUG: "interactive"
+      WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+      GSETTINGS_SCHEMA_DIR: "${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}/glib-2.0/schemas"
     # runs-on: [ ubuntu-latest, windows-latest, macos-latest ]
 
     steps:
