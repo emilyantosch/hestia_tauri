@@ -70,5 +70,5 @@ jobs:
       - name: Run tests
         run: |
           cd ./app
-          deno run tauri dev
+          deno test tauri dev
 ...
