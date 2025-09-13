@@ -11,7 +11,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs: #can run in parallel when creating seperate jobs
-  cargo-build-and-test:
+  cargo-build:
     name: cargo-build-and-test
     runs-on: ubuntu-latest
     # runs-on: [ ubuntu-latest, windows-latest, macos-latest ]
@@ -30,45 +30,70 @@ jobs: #can run in parallel when creating seperate jobs
 
       - name: cargo-test
         run: cargo test --manifest-path=./app/Cargo.toml --verbose
-  # build-deno:
-...
 
----
 #---deno---
-name: deno
-
-on:
-  push:
-  # branches: [ "main", "dev", "test", "cicd" ]
-  pull_request:
-    branches: ["main", "dev", "test"]
-
 permissions:
   contents: read
 
-jobs:
-  deno-build-and-test:
+  deno-build:
+    name: cargo-build-and-test
     runs-on: ubuntu-latest
     # runs-on: [ ubuntu-latest, windows-latest, macos-latest ]
 
     steps:
-      - name: Setup repo
-        uses: actions/checkout@v4
+    - name: Setup repo
+      uses: actions/checkout@v4
 
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+    - name: Setup Deno
+      uses: denoland/setup-deno@v2
+      with:
+        deno-version: v2.x
 
-      # Uncomment this step to verify the use of 'deno fmt' on each commit.
-      - name: Verify formatting
-        run: deno fmt --check
+    # Uncomment this step to verify the use of 'deno fmt' on each commit.
+    - name: Verify formatting
+      run: deno fmt --check
 
-      - name: Run linter
-        run: deno lint
+    - name: Run linter
+      run: deno lint
 
       # - name: Run tests
       #   run: |
       #     cd ./app
       #     deno run tauri dev
-...
+
+# name: deno
+#
+# on:
+#   push:
+#   # branches: [ "main", "dev", "test", "cicd" ]
+#   pull_request:
+#     branches: ["main", "dev", "test"]
+#
+# permissions:
+#   contents: read
+#
+# jobs:
+#   deno-build-and-test:
+#     runs-on: ubuntu-latest
+#     # runs-on: [ ubuntu-latest, windows-latest, macos-latest ]
+#
+#     steps:
+#       - name: Setup repo
+#         uses: actions/checkout@v4
+#
+#       - name: Setup Deno
+#         uses: denoland/setup-deno@v2
+#         with:
+#           deno-version: v2.x
+#
+#       # Uncomment this step to verify the use of 'deno fmt' on each commit.
+#       - name: Verify formatting
+#         run: deno fmt --check
+#
+#       - name: Run linter
+#         run: deno lint
+#
+#       # - name: Run tests
+#       #   run: |
+#       #     cd ./app
+#       #     deno run tauri dev
