@@ -15,7 +15,7 @@ use entity::{file_system_identifier, file_types, files, folders, prelude::*};
 use crate::data::commands::watched_folders::WatchedFolderTree;
 use crate::file_system::utils::{FileInfo, FolderInfo};
 
-use crate::database::DatabaseManager;
+use crate::database::{DatabaseManager, ThumbnailRepository};
 use crate::errors::{DbError, DbErrorKind};
 use crate::file_system::{FileEvent, FolderEvent};
 
@@ -49,14 +49,23 @@ pub struct UpsertFolderBatchReport {
 pub struct FileOperations {
     database_manager: Arc<DatabaseManager>,
     file_type_cache: Arc<RwLock<HashMap<String, i32>>>,
+    thumbnail_repository: ThumbnailRepository,
 }
 
 impl FileOperations {
     pub fn new(database_manager: Arc<DatabaseManager>) -> Self {
+        let thumbnail_repository = ThumbnailRepository::new(Arc::clone(&database_manager));
+        
         Self {
             database_manager,
             file_type_cache: Arc::new(RwLock::new(HashMap::new())),
+            thumbnail_repository,
         }
+    }
+
+    /// Get a reference to the thumbnail repository
+    pub fn thumbnail_repository(&self) -> &ThumbnailRepository {
+        &self.thumbnail_repository
     }
 
     //TODO: Finish this function to return either None for when the folder is one of the root

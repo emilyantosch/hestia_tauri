@@ -1,12 +1,13 @@
 use anyhow::{Context, Result};
+use chrono::Local;
+use entity::thumbnails;
 use image::{imageops::FilterType, DynamicImage, ImageBuffer, ImageFormat, Rgba};
+use sea_orm::{ActiveValue, Set};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::io::Cursor;
 use std::path::Path;
 use thiserror::Error;
-use entity::thumbnails;
-use sea_orm::{Set, ActiveValue};
-use chrono::Utc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ThumbnailSize {
@@ -51,7 +52,7 @@ impl From<ThumbnailSize> for String {
 
 impl TryFrom<&str> for ThumbnailSize {
     type Error = ThumbnailError;
-    
+
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
             "small" => Ok(ThumbnailSize::Small),
@@ -66,7 +67,7 @@ impl TryFrom<&str> for ThumbnailSize {
 
 impl TryFrom<String> for ThumbnailSize {
     type Error = ThumbnailError;
-    
+
     fn try_from(value: String) -> Result<Self, Self::Error> {
         Self::try_from(value.as_str())
     }
@@ -93,8 +94,6 @@ pub enum ThumbnailError {
     GenerationFailed { reason: String },
 }
 
-pub type ThumbnailResult<T> = std::result::Result<T, ThumbnailError>;
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Thumbnail {
     pub size: ThumbnailSize,
@@ -113,35 +112,35 @@ impl Thumbnail {
             file_size,
         }
     }
-    
+
     pub fn with_image_data(size: ThumbnailSize, data: Vec<u8>) -> Self {
         Self::new(size, data, "image/png".to_string())
     }
-    
+
     pub fn size(&self) -> ThumbnailSize {
         self.size
     }
-    
+
     pub fn data(&self) -> &[u8] {
         &self.data
     }
-    
+
     pub fn mime_type(&self) -> &str {
         &self.mime_type
     }
-    
+
     pub fn file_size(&self) -> usize {
         self.file_size
     }
-    
+
     pub fn dimensions(&self) -> (u32, u32) {
         self.size.dimensions()
     }
-    
+
     /// Converts to SeaORM ActiveModel for database insertion
     pub fn to_active_model(self, file_id: i32) -> thumbnails::ActiveModel {
-        let now = Utc::now();
-        
+        let now = Local::now().naive_local();
+
         thumbnails::ActiveModel {
             id: ActiveValue::NotSet,
             file_id: Set(file_id),
@@ -149,15 +148,15 @@ impl Thumbnail {
             data: Set(self.data),
             mime_type: Set(self.mime_type),
             file_size: Set(self.file_size as i32),
-            created_at: Set(now.into()),
-            updated_at: Set(now.into()),
+            created_at: Set(now),
+            updated_at: Set(now),
         }
     }
-    
+
     /// Creates thumbnail from SeaORM Model
     pub fn from_model(model: thumbnails::Model) -> Result<Self, ThumbnailError> {
         let size = ThumbnailSize::try_from(model.size)?;
-        
+
         Ok(Self {
             size,
             data: model.data,
@@ -165,7 +164,7 @@ impl Thumbnail {
             file_size: model.file_size as usize,
         })
     }
-    
+
     /// Returns true if this is an image thumbnail (not a file icon)
     pub fn is_image(&self) -> bool {
         self.mime_type == "image/png" || self.mime_type.starts_with("image/")
@@ -191,8 +190,9 @@ impl ThumbnailGenerator {
         &self,
         image_data: &[u8],
         size: ThumbnailSize,
-    ) -> ThumbnailResult<Thumbnail> {
-        let img = image::load_from_memory(image_data).context("Failed to decode image")?;
+    ) -> Result<Thumbnail> {
+        let img =
+            image::load_from_memory(image_data).context("Failed to load image from memory")?;
 
         let (target_width, target_height) = size.dimensions();
 
@@ -212,12 +212,13 @@ impl ThumbnailGenerator {
         &self,
         file_path: &Path,
         size: ThumbnailSize,
-    ) -> ThumbnailResult<Thumbnail> {
+    ) -> Result<Thumbnail> {
         // Check if file exists first
         if !file_path.exists() {
             return Err(ThumbnailError::FileNotFound {
                 path: file_path.display().to_string(),
-            });
+            })
+            .context("The path to the file to be converted is invalid!");
         }
 
         // Detect file type first
@@ -234,11 +235,7 @@ impl ThumbnailGenerator {
         }
     }
 
-    fn generate_file_icon(
-        &self,
-        mime_type: &str,
-        size: ThumbnailSize,
-    ) -> ThumbnailResult<Thumbnail> {
+    fn generate_file_icon(&self, mime_type: &str, size: ThumbnailSize) -> Result<Thumbnail> {
         let (width, height) = size.dimensions();
         let mut img = ImageBuffer::new(width, height);
 
@@ -252,7 +249,9 @@ impl ThumbnailGenerator {
 
         // TODO: Add file type icon/text overlay in future iteration
         let mut output = Vec::new();
-        img.save_with_format(&mut std::io::Cursor::new(&mut output), ImageFormat::Png)
+        let dynamic_img = DynamicImage::ImageRgba8(img);
+        dynamic_img
+            .write_to(&mut Cursor::new(&mut output), ImageFormat::Png)
             .context("Failed to encode file icon")?;
 
         Ok(Thumbnail::new(size, output, "image/png".to_string()))
@@ -321,7 +320,7 @@ mod tests {
         let size = ThumbnailSize::Medium;
 
         let thumbnail = Thumbnail::new(size, data.clone(), mime_type.clone());
-        
+
         assert_eq!(thumbnail.size(), size);
         assert_eq!(thumbnail.data(), &data[..]);
         assert_eq!(thumbnail.mime_type(), &mime_type);
@@ -335,7 +334,7 @@ mod tests {
         let size = ThumbnailSize::Large;
 
         let thumbnail = Thumbnail::with_image_data(size, data.clone());
-        
+
         assert_eq!(thumbnail.size(), size);
         assert_eq!(thumbnail.data(), &data[..]);
         assert_eq!(thumbnail.mime_type(), "image/png");
@@ -346,7 +345,7 @@ mod tests {
     #[test]
     fn test_thumbnail_seaorm_conversion() {
         use chrono::Utc;
-        
+
         let original_data = vec![1, 2, 3, 4, 5];
         let size = ThumbnailSize::Small;
         let mime_type = "image/jpeg".to_string();
@@ -355,7 +354,7 @@ mod tests {
 
         // Create thumbnail
         let thumbnail = Thumbnail::new(size, original_data.clone(), mime_type.clone());
-        
+
         // Test to_active_model
         let active_model = thumbnail.clone().to_active_model(file_id);
         assert_eq!(active_model.file_id.clone().unwrap(), file_id);
@@ -363,9 +362,9 @@ mod tests {
         assert_eq!(active_model.data.clone().unwrap(), original_data);
         assert_eq!(active_model.mime_type.clone().unwrap(), mime_type);
         assert_eq!(active_model.file_size.clone().unwrap(), file_size as i32);
-        
+
         // Create a mock Model for testing from_model
-        let now = Utc::now();
+        let now = Local::now().naive_local();
         let model = thumbnails::Model {
             id: 1,
             file_id,
@@ -373,10 +372,10 @@ mod tests {
             data: original_data.clone(),
             mime_type: mime_type.clone(),
             file_size: file_size as i32,
-            created_at: now.into(),
-            updated_at: now.into(),
+            created_at: now,
+            updated_at: now,
         };
-        
+
         // Test from_model
         let restored_thumbnail = Thumbnail::from_model(model).unwrap();
         assert_eq!(restored_thumbnail.size(), size);
@@ -388,15 +387,27 @@ mod tests {
     #[test]
     fn test_thumbnail_size_conversions() {
         // Test TryFrom<&str>
-        assert_eq!(ThumbnailSize::try_from("small").unwrap(), ThumbnailSize::Small);
-        assert_eq!(ThumbnailSize::try_from("medium").unwrap(), ThumbnailSize::Medium);
-        assert_eq!(ThumbnailSize::try_from("large").unwrap(), ThumbnailSize::Large);
+        assert_eq!(
+            ThumbnailSize::try_from("small").unwrap(),
+            ThumbnailSize::Small
+        );
+        assert_eq!(
+            ThumbnailSize::try_from("medium").unwrap(),
+            ThumbnailSize::Medium
+        );
+        assert_eq!(
+            ThumbnailSize::try_from("large").unwrap(),
+            ThumbnailSize::Large
+        );
         assert!(ThumbnailSize::try_from("invalid").is_err());
-        
+
         // Test TryFrom<String>
-        assert_eq!(ThumbnailSize::try_from("small".to_string()).unwrap(), ThumbnailSize::Small);
+        assert_eq!(
+            ThumbnailSize::try_from("small".to_string()).unwrap(),
+            ThumbnailSize::Small
+        );
         assert!(ThumbnailSize::try_from("invalid".to_string()).is_err());
-        
+
         // Test From<ThumbnailSize> for String
         let size_str: String = ThumbnailSize::Medium.into();
         assert_eq!(size_str, "medium");
@@ -406,12 +417,19 @@ mod tests {
     fn test_thumbnail_is_image() {
         let png_thumbnail = Thumbnail::with_image_data(ThumbnailSize::Small, vec![1, 2, 3]);
         assert!(png_thumbnail.is_image());
-        
-        let jpeg_thumbnail = Thumbnail::new(ThumbnailSize::Medium, vec![1, 2, 3], "image/jpeg".to_string());
+
+        let jpeg_thumbnail = Thumbnail::new(
+            ThumbnailSize::Medium,
+            vec![1, 2, 3],
+            "image/jpeg".to_string(),
+        );
         assert!(jpeg_thumbnail.is_image());
-        
-        let pdf_thumbnail = Thumbnail::new(ThumbnailSize::Large, vec![1, 2, 3], "application/pdf".to_string());
+
+        let pdf_thumbnail = Thumbnail::new(
+            ThumbnailSize::Large,
+            vec![1, 2, 3],
+            "application/pdf".to_string(),
+        );
         assert!(!pdf_thumbnail.is_image());
     }
 }
-
