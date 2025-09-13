@@ -3,27 +3,22 @@ name: rust
 
 on:
   push:
-  # branches: [ "main", "dev", "test", "cicd" ]
+  branches: [ "main", "dev", "test", "cicd" ]
   pull_request:
     branches: ["main", "dev", "test"]
-
-permissions:
-  contents: read #---deno---
-
-env:
-  CARGO_TERM_COLOR: always
 
 jobs: #can run in parallel when creating seperate jobs
   cargo-build:
     name: cargo-build-and-test
     runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
     # runs-on: [ ubuntu-latest, windows-latest, macos-latest ]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install system dependencies
-        # run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev pkg-config libgdk-3-dev
+      - name: Install system dependencies for ubuntu # tauri v2 https://tauri.app/start/prerequisites/
         run: |
           sudo apt update
           sudo apt install libwebkit2gtk-4.1-dev \
@@ -36,9 +31,9 @@ jobs: #can run in parallel when creating seperate jobs
             libayatana-appindicator3-dev \
             librsvg2-dev
 
-        # name: cargo-version
-        # run: |
-        #   echo "cargo version in use: $(cargo --version)"
+      - name: cargo-version
+        run: |
+          echo "cargo version in use: $(cargo --version)"
 
       - name: cargo-check
         run: cargo check --manifest-path=./app/Cargo.toml --verbose
@@ -55,15 +50,26 @@ jobs: #can run in parallel when creating seperate jobs
     name: deno-build-and-test
     runs-on: ubuntu-latest
     # runs-on: [ ubuntu-latest, windows-latest, macos-latest ]
+    permissions:
+      contents: read #---deno---
 
     steps:
       - name: Setup repo
         uses: actions/checkout@v4
 
-      - name: Setup Deno
+      - name: Install deno
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+
+      # - name: Setup tauri-cli
+      #   run: |
+      #     cargo install tauri-cli
+      
+      - name: Initilize deno dev environment
+        run: |
+          cd ./app
+          deno install
 
       # Uncomment this step to verify the use of 'deno fmt' on each commit.
       - name: Verify formatting
@@ -77,41 +83,5 @@ jobs: #can run in parallel when creating seperate jobs
         if: always()
         run: |
           cd ./app
-          deno run tauri dev
-
-# name: deno
-#
-# on:
-#   push:
-#   # branches: [ "main", "dev", "test", "cicd" ]
-#   pull_request:
-#     branches: ["main", "dev", "test"]
-#
-# permissions:
-#   contents: read
-#
-# jobs:
-#   deno-build-and-test:
-#     runs-on: ubuntu-latest
-#     # runs-on: [ ubuntu-latest, windows-latest, macos-latest ]
-#
-#     steps:
-#       - name: Setup repo
-#         uses: actions/checkout@v4
-#
-#       - name: Setup Deno
-#         uses: denoland/setup-deno@v2
-#         with:
-#           deno-version: v2.x
-#
-#       # Uncomment this step to verify the use of 'deno fmt' on each commit.
-#       - name: Verify formatting
-#         run: deno fmt --check
-#
-#       - name: Run linter
-#         run: deno lint
-#
-#       # - name: Run tests
-#       #   run: |
-#       #     cd ./app
-#       #     deno run tauri dev
+          deno task tauri dev
+          # deno test tauri dev
