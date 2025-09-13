@@ -14,6 +14,7 @@ pkgs.mkShell {
     webkitgtk_4_1
     nodejs
     deno
+    bun
     unixtools.netstat
     lsb-release
     xdg-utils
@@ -21,10 +22,6 @@ pkgs.mkShell {
     sqlite.dev
     openssl.dev
     pkg-config
-    # npm
-    nodejs
-    bun
-    deno
   ];
   PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
   RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
