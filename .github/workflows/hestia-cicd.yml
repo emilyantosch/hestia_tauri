@@ -74,13 +74,13 @@ jobs: #can run in parallel when creating seperate jobs
         run: cargo test --manifest-path=./app/Cargo.toml --verbose
 
       # Uncomment this step to verify the use of 'deno fmt' on each commit.
-      - name: deno verify formatting
+      - name: deno fmt
         if: always()
-        run: deno fmt --check
+        run: deno fmt ./app/src --check
 
       - name: deno linter
         if: always()
-        run: deno lint
+        run: deno lint ./app/src #for website add different pipeline
 
       - name: deno run
         if: always()
