@@ -71,7 +71,7 @@ jobs: #can run in parallel when creating seperate jobs
 
       - name: cargo test
         if: always()
-        run: cargo test --manifest-path=./app/Cargo.toml --verbose
+        run: timeout 120s cargo test --manifest-path=./app/Cargo.toml --verbose
 
       # Uncomment this step to verify the use of 'deno fmt' on each commit.
       - name: deno fmt
