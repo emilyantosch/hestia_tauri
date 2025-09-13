@@ -21,6 +21,10 @@ jobs: #can run in parallel when creating seperate jobs
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev pkg-config
+
         # name: cargo-version
         # run: |
         #   echo "cargo version in use: $(cargo --version)"
