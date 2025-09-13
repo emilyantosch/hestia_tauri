@@ -11,8 +11,6 @@ permissions:
   contents: read #---deno---
 
 jobs: #can run in parallel when creating seperate jobs
-  ubuntu-env:
-
   hestia-build:
     name: hestia build
     runs-on: ubuntu-latest
@@ -77,3 +75,6 @@ jobs: #can run in parallel when creating seperate jobs
           cd ./app
           deno task tauri dev
           # deno test tauri dev
+    # steps:
+    #   - name: trivy checks
+
