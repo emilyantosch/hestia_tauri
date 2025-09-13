@@ -16,7 +16,8 @@ jobs: #can run in parallel when creating seperate jobs
     # runs-on: [ ubuntu-latest, windows-latest, macos-latest ]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Setup repo
+        uses: actions/checkout@v4
 
       - name: Install system dependencies for ubuntu # tauri v2 https://tauri.app/start/prerequisites/
         run: |
