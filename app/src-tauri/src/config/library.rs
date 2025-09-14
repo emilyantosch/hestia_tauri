@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::read_to_string,
@@ -8,7 +9,7 @@ use std::{
 use tracing::{error, info};
 
 use crate::{
-    errors::{FileError, LibraryError, LibraryErrorKind},
+    errors::{FileError, LibraryError},
     utils::{self, canon_path::CanonPath},
 };
 use std::path::{Path, PathBuf};
@@ -72,20 +73,14 @@ impl Library {
         }
     }
 
-    pub fn save_last(&self) -> std::result::Result<(), LibraryError> {
+    pub fn save_last(&self) -> std::result::Result<()> {
         match self.share_path.as_ref() {
             Some(path) => {
                 let last_library = LastLibrary {
                     path: Some(path.to_owned()),
                 };
 
-                let last_library_toml: String = toml::to_string(&last_library).map_err(|e| {
-                    LibraryError::with_source(
-                        LibraryErrorKind::Io,
-                        "The conversion to TOML format of last library failed".to_string(),
-                        Some(Box::new(e)),
-                    )
-                })?;
+                let last_library_toml: String = toml::to_string(&last_library)?;
                 {
                     let mut file: File = std::fs::OpenOptions::new()
                         .create(true)
@@ -103,30 +98,19 @@ impl Library {
     }
 
     /// Return the library from the previous run, may return LibraryError if there is none
-    pub fn last() -> Result<Library, LibraryError> {
+    pub fn last() -> Result<Library> {
         let last_path = Self::create_or_validate_data_directory()?.join("hestia/last_lib.toml");
         let mut last_content = String::new();
         {
             let mut file = std::fs::OpenOptions::new().read(true).open(&last_path)?;
             file.read_to_string(&mut last_content)?;
         }
-        let last_lib_path: LastLibrary = toml::from_str(&last_content).map_err(|e| {
-            LibraryError::with_source(
-                LibraryErrorKind::Io,
-                "Could not find last library, creating new one...".to_string(),
-                Some(Box::new(e)),
-            )
-        })?;
+        let last_lib_path: LastLibrary = toml::from_str(&last_content)?;
         let share_path = match last_lib_path.path {
             Some(path) => path,
-            None => {
-                return Err(LibraryError::new(
-                    LibraryErrorKind::LastLibraryNotFound,
-                    "Last library path was empty, creating new library!".to_string(),
-                ))
-            }
+            None => return Err(LibraryError::InvalidSharePath)?,
         };
-        Self::new().switch_or_create_lib(&share_path)
+        Ok(Self::new().switch_or_create_lib(&share_path)?)
     }
 
     pub fn last_or_new() -> Library {
@@ -139,40 +123,26 @@ impl Library {
         }
     }
 
-    pub fn create_or_validate_data_directory() -> Result<PathBuf, LibraryError> {
+    pub fn create_or_validate_data_directory() -> Result<PathBuf> {
         // Check whether datahome format is available on current OS
         let datahome = match dirs::data_dir() {
             Some(dir) => dir,
             None => {
-                return Err(LibraryError::new(
-                    LibraryErrorKind::InvalidSharePath,
-                    "There is no know format of the data directory on this OS!".to_string(),
-                ));
+                return Err(LibraryError::DataHomeNotFoundError)?;
             }
         };
         // If format is available, but data dir does not exist, create it and await
         if !datahome.try_exists().is_ok_and(|x| x) {
-            std::fs::create_dir_all(&datahome).map_err(|e| {
-                LibraryError::with_source(
-                    LibraryErrorKind::Io,
-                    format!(
-                        "Local data directory at {datahome:#?} could neither be found nor created"
-                    ),
-                    Some(Box::new(e)),
-                )
-            })?;
+            std::fs::create_dir_all(&datahome)?;
         }
         Ok(datahome)
     }
 
-    pub fn get_canon_database_path(&self) -> Result<CanonPath, LibraryError> {
+    pub fn get_canon_database_path(&self) -> Result<CanonPath> {
         let db_path = match self.share_path.as_ref() {
             Some(path) => path.join("db.sqlite"),
             None => {
-                return Err(LibraryError::new(
-                    LibraryErrorKind::Io,
-                    "No db path found at!".to_string(),
-                ));
+                return Err(LibraryError::InvalidSharePath)?;
             }
         };
         Ok(CanonPath::from(db_path))
@@ -182,7 +152,7 @@ impl Library {
     ///     - Ok(true): The save to disk was a success
     ///     - Ok(false): The save to disk was a success, but the file had to be created
     ///     - Err: The save to disk failed either because share path was not set or the write to the file failed
-    pub fn save_config(&self) -> Result<bool, LibraryError> {
+    pub fn save_config(&self) -> Result<bool> {
         info!("Save config started!");
         let config_path = match self.share_path.as_ref() {
             Some(path) => {
@@ -190,15 +160,12 @@ impl Library {
                 path.join("config.toml")
             }
             None => {
-                return Err(LibraryError::new(
-                    LibraryErrorKind::Io,
-                    "No config path found at!".to_string(),
-                ));
+                return Err(LibraryError::InvalidSharePath)?;
             }
         };
         info!("Config Path {config_path:#?} extracted!");
         Self::open_or_create_database_file(self.share_path.as_ref().unwrap())?;
-        self._save_config(config_path)
+        Ok(self._save_config(config_path)?)
     }
 
     fn _save_config(&self, config_path: PathBuf) -> Result<bool, LibraryError> {

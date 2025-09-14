@@ -7,7 +7,7 @@ use crate::{
     config::library::Library,
     data::watched_folders::WatchedFolderTree,
     database::{DatabaseManager, FileOperations},
-    errors::{DbError, LibraryError, LibraryErrorKind},
+    errors::{DbError, LibraryError, ScannerError},
     file_system::{
         DatabaseFileWatcherEventHandler, DirectoryScanner, FileWatcher, FileWatcherHandler,
     },
@@ -30,18 +30,11 @@ pub struct AppState {
 
 impl AppState {
     /// Create a new AppState with default components
-    pub async fn new() -> Result<Self, LibraryError> {
+    pub async fn new() -> Result<Self> {
         // Initialize database manager with default settings
         let database_manager = Arc::new(DatabaseManager::new_sqlite_default().await?);
         // Test database connection
-        database_manager.test_connection().await.map_err(|e| {
-            LibraryError::with_source(
-                crate::errors::LibraryErrorKind::Io,
-                "Database connection test failed".to_string(),
-                Some(Box::new(e)),
-            )
-        })?;
-
+        database_manager.test_connection().await?;
         // Create file operations with database connection
         let file_operations = FileOperations::new(Arc::clone(&database_manager));
 
@@ -62,7 +55,7 @@ impl AppState {
     }
 
     /// Switch to a new library and update all dependent components
-    pub async fn switch_library(&mut self, library: Library) -> Result<(), LibraryError> {
+    pub async fn switch_library(&mut self, library: Library) -> Result<()> {
         info!("Switching to library: {:?}", library.library_config);
 
         // Update library
@@ -83,7 +76,7 @@ impl AppState {
     }
 
     /// Update database connection to point to the new library's database
-    async fn update_database_connection(&mut self, db_path: CanonPath) -> Result<(), LibraryError> {
+    async fn update_database_connection(&mut self, db_path: CanonPath) -> Result<()> {
         // For now, create a new DatabaseManager with the new path
         // TODO: Add proper connection switching to DatabaseManager
         let connection_string = format!("sqlite:///{}", db_path.as_str()?);
@@ -104,22 +97,10 @@ impl AppState {
         };
 
         // Create new database manager
-        self.database_manager = Arc::new(DatabaseManager::new(settings).await.map_err(|e| {
-            LibraryError::with_source(
-                crate::errors::LibraryErrorKind::Io,
-                "Failed to create new database manager".to_string(),
-                Some(Box::new(e)),
-            )
-        })?);
+        self.database_manager = Arc::new(DatabaseManager::new(settings).await?);
 
         // Test the new connection
-        self.database_manager.test_connection().await.map_err(|e| {
-            LibraryError::with_source(
-                crate::errors::LibraryErrorKind::Io,
-                "Failed to test new database connection".to_string(),
-                Some(Box::new(e)),
-            )
-        })?;
+        self.database_manager.test_connection().await?;
 
         Ok(())
     }
@@ -145,20 +126,12 @@ impl AppState {
     }
 
     /// Run database migrations for the current library
-    pub async fn run_migrations(&self) -> Result<(), LibraryError> {
+    pub async fn run_migrations(&self) -> Result<()> {
         info!("Running database migrations");
 
         let db_connection = self.database_manager.get_connection();
 
-        Migrator::up(db_connection.as_ref(), None)
-            .await
-            .map_err(|e| {
-                LibraryError::with_source(
-                    crate::errors::LibraryErrorKind::Io,
-                    "Failed to run database migrations".to_string(),
-                    Some(Box::new(e)),
-                )
-            })?;
+        Migrator::up(db_connection.as_ref(), None).await?;
 
         info!("Database migrations completed successfully");
         Ok(())
@@ -181,7 +154,7 @@ impl AppState {
         }
     }
 
-    pub async fn upsert_root_folders(&self) -> Result<(), LibraryError> {
+    pub async fn upsert_root_folders(&self) -> Result<()> {
         let library_paths = self.get_library_paths();
 
         if library_paths.is_empty() {
@@ -191,19 +164,12 @@ impl AppState {
 
         self.file_operations
             .upsert_root_folders(library_paths)
-            .await
-            .map_err(|e| {
-                LibraryError::with_source(
-                    LibraryErrorKind::Io,
-                    "Unable to upsert root folders from library config!".to_string(),
-                    Some(Box::new(e)),
-                )
-            })?;
+            .await?;
 
         Ok(())
     }
     /// Perform initial directory scan for all library paths
-    pub async fn scan_library_directories(&self) -> Result<(), LibraryError> {
+    pub async fn scan_library_directories(&self) -> Result<()> {
         let library_paths = self.get_library_paths();
 
         if library_paths.is_empty() {
@@ -242,11 +208,9 @@ impl AppState {
                 }
                 Err(e) => {
                     error!("Failed to scan directory {}: {:?}", path.display(), e);
-                    return Err(LibraryError::with_source(
-                        crate::errors::LibraryErrorKind::Io,
-                        format!("Failed to scan directory: {}", path.display()),
-                        Some(Box::new(e)),
-                    ));
+                    return Err(ScannerError::PathScanFailedError {
+                        path: path.to_string_lossy().to_string(),
+                    })?;
                 }
             }
         }
@@ -260,7 +224,7 @@ impl AppState {
         self.file_watcher_handler = Some(handler);
     }
 
-    pub async fn create_file_watcher(&mut self) -> Result<(), LibraryError> {
+    pub async fn create_file_watcher(&mut self) -> Result<()> {
         let (fw_sender, fw_receiver) = tokio::sync::mpsc::unbounded_channel();
 
         self.set_file_watcher_handler(FileWatcherHandler { sender: fw_sender });
