@@ -9,8 +9,9 @@ use sea_orm::{
 
 use entity::{prelude::*, thumbnails};
 
+use crate::data::internal::thumbnails::{Thumbnail, ThumbnailSize};
 use crate::database::DatabaseManager;
-use crate::file_system::thumbnails::{Thumbnail, ThumbnailSize};
+use crate::errors::thumbnail::ThumbnailError;
 
 /// Statistics about thumbnails in the database
 #[derive(Debug, Clone)]
@@ -366,4 +367,3 @@ mod tests {
     // NOTE: More comprehensive tests would require database setup/teardown
     // These would be better placed in integration tests
 }
-

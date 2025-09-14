@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::mpsc;
 use tracing::{error, info};
@@ -31,15 +32,7 @@ impl AppState {
     /// Create a new AppState with default components
     pub async fn new() -> Result<Self, LibraryError> {
         // Initialize database manager with default settings
-        let database_manager =
-            Arc::new(DatabaseManager::new_sqlite_default().await.map_err(|e| {
-                LibraryError::with_source(
-                    crate::errors::LibraryErrorKind::Io,
-                    "Failed to initialize database manager".to_string(),
-                    Some(Box::new(e)),
-                )
-            })?);
-
+        let database_manager = Arc::new(DatabaseManager::new_sqlite_default().await?);
         // Test database connection
         database_manager.test_connection().await.map_err(|e| {
             LibraryError::with_source(

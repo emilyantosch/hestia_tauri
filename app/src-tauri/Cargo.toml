@@ -53,3 +53,4 @@ tauri-plugin-dialog = "2"
 migration = { path = "../migration" }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff"] }
 infer = "0.16"
+num_cpus = "1.16"

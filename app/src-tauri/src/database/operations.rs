@@ -13,8 +13,8 @@ use tokio::sync::RwLock;
 use entity::{file_system_identifier, file_types, files, folders, prelude::*};
 
 use crate::data::commands::watched_folders::WatchedFolderTree;
-use crate::file_system::utils::{FileInfo, FolderInfo};
 
+use crate::data::folder::Folder;
 use crate::database::{DatabaseManager, ThumbnailRepository};
 use crate::errors::{DbError, DbErrorKind};
 use crate::file_system::{FileEvent, FolderEvent};
@@ -55,7 +55,7 @@ pub struct FileOperations {
 impl FileOperations {
     pub fn new(database_manager: Arc<DatabaseManager>) -> Self {
         let thumbnail_repository = ThumbnailRepository::new(Arc::clone(&database_manager));
-        
+
         Self {
             database_manager,
             file_type_cache: Arc::new(RwLock::new(HashMap::new())),
@@ -147,7 +147,7 @@ impl FileOperations {
             .filter(folders::Column::Path.eq(path.to_string_lossy().to_string()))
             .one(transaction)
             .await?;
-        let folder_info = FolderInfo::create_folder_info(&path).await?;
+        let folder_info = Folder::create_folder_info(&path).await?;
         info!("Got folder info {folder_info:#?} for root folder {path:#?}");
         let file_system_id = self
             .get_or_create_file_system_identifier(&path, transaction)

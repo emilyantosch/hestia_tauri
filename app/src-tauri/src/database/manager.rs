@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,12 +15,9 @@ pub struct DatabaseManager {
 
 impl DatabaseManager {
     /// Create a new DatabaseManager with the provided settings
-    pub async fn new(settings: DatabaseSettings) -> Result<Self, DbError> {
+    pub async fn new(settings: DatabaseSettings) -> Result<Self> {
         if !settings.is_configured() {
-            return Err(DbError::new(
-                DbErrorKind::ConnectionError,
-                "Database settings are not properly configured".to_string(),
-            ));
+            return Err(DbError::ConfigurationError)?;
         }
 
         let connection = Self::create_connection(&settings).await?;
@@ -31,7 +29,7 @@ impl DatabaseManager {
     }
 
     /// Create a new DatabaseManager with default SQLite settings
-    pub async fn new_sqlite_default() -> Result<Self, DbError> {
+    pub async fn new_sqlite_default() -> Result<Self> {
         let sqlite_config = crate::config::database::SqliteConfig::default();
         let settings = DatabaseSettings::new_sqlite(sqlite_config);
         Self::new(settings).await
@@ -48,33 +46,21 @@ impl DatabaseManager {
     }
 
     /// Test the database connection
-    pub async fn test_connection(&self) -> Result<(), DbError> {
+    pub async fn test_connection(&self) -> Result<()> {
         match sea_orm::query::Statement::from_string(
             sea_orm::DatabaseBackend::Sqlite,
             "SELECT 1".to_string(),
         ) {
             statement => {
-                self.connection.execute(statement).await.map_err(|e| {
-                    DbError::with_source(
-                        DbErrorKind::ConnectionError,
-                        "Failed to test database connection".to_string(),
-                        e,
-                    )
-                })?;
+                self.connection.execute(statement).await?;
             }
         }
         Ok(())
     }
 
     /// Create a database connection based on the provided settings
-    async fn create_connection(settings: &DatabaseSettings) -> Result<DatabaseConnection, DbError> {
-        let connection_string = settings.get_connection_string().map_err(|e| {
-            DbError::new(
-                DbErrorKind::ConfigurationError,
-                format!("Failed to build connection string: {}", e),
-            )
-        })?;
-
+    async fn create_connection(settings: &DatabaseSettings) -> Result<DatabaseConnection> {
+        let connection_string = settings.get_connection_string()?;
         let mut options = ConnectOptions::new(connection_string);
 
         match settings.db_type {

@@ -1,3 +1,4 @@
+use crate::errors::thumbnail::ThumbnailError;
 use anyhow::{Context, Result};
 use chrono::Local;
 use entity::thumbnails;
@@ -7,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::io::Cursor;
 use std::path::Path;
-use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ThumbnailSize {
@@ -71,27 +71,6 @@ impl TryFrom<String> for ThumbnailSize {
     fn try_from(value: String) -> Result<Self, Self::Error> {
         Self::try_from(value.as_str())
     }
-}
-
-#[derive(Error, Debug)]
-pub enum ThumbnailError {
-    #[error("Image decoding failed: {0}")]
-    ImageDecode(#[from] image::ImageError),
-
-    #[error("File I/O error: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("Database error: {0}")]
-    Database(#[from] sea_orm::DbErr),
-
-    #[error("Unsupported file type: {mime_type}")]
-    UnsupportedFileType { mime_type: String },
-
-    #[error("File not found: {path}")]
-    FileNotFound { path: String },
-
-    #[error("Thumbnail generation failed: {reason}")]
-    GenerationFailed { reason: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -186,7 +165,7 @@ impl ThumbnailGenerator {
         Self { filter_type }
     }
 
-    pub fn generate_image_thumbnail(
+    pub async fn generate_image_thumbnail(
         &self,
         image_data: &[u8],
         size: ThumbnailSize,
@@ -208,7 +187,7 @@ impl ThumbnailGenerator {
         Ok(Thumbnail::with_image_data(size, output))
     }
 
-    pub fn generate_from_file_path(
+    pub async fn generate_from_file_path(
         &self,
         file_path: &Path,
         size: ThumbnailSize,
@@ -230,12 +209,14 @@ impl ThumbnailGenerator {
             .unwrap_or("application/octet-stream");
 
         match mime_type {
-            mime if mime.starts_with("image/") => self.generate_image_thumbnail(&file_data, size),
-            _ => self.generate_file_icon(mime_type, size),
+            mime if mime.starts_with("image/") => {
+                self.generate_image_thumbnail(&file_data, size).await
+            }
+            _ => self.generate_file_icon(mime_type, size).await,
         }
     }
 
-    fn generate_file_icon(&self, mime_type: &str, size: ThumbnailSize) -> Result<Thumbnail> {
+    async fn generate_file_icon(&self, mime_type: &str, size: ThumbnailSize) -> Result<Thumbnail> {
         let (width, height) = size.dimensions();
         let mut img = ImageBuffer::new(width, height);
 

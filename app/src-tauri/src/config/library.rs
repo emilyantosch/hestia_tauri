@@ -8,7 +8,7 @@ use std::{
 use tracing::{error, info};
 
 use crate::{
-    errors::{FileError, FileErrorKind, LibraryError, LibraryErrorKind},
+    errors::{FileError, LibraryError, LibraryErrorKind},
     utils::{self, canon_path::CanonPath},
 };
 use std::path::{Path, PathBuf};
