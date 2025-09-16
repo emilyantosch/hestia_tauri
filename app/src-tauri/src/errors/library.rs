@@ -43,8 +43,10 @@ pub enum LibraryError {
     Io,
     #[error("The provided share path is invalid!")]
     InvalidSharePath,
-    #[error("The config for the library could not be created!")]
-    ConfigCreationError,
+    #[error("The config for the library could not be created! Reason: {error}")]
+    ConfigCreationError { error: String },
+    #[error("The config for the library could not be deleted! Reason: {error}")]
+    ConfigDeletionError { error: String },
     #[error("There has been no last library detected, prompting for a new one...")]
     LastLibraryNotFound,
     #[error("The OS has no known configuration for a data home directory!")]

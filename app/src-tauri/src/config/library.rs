@@ -73,7 +73,7 @@ impl Library {
         }
     }
 
-    pub fn save_last(&self) -> std::result::Result<()> {
+    pub fn save_last(&self) -> Result<()> {
         match self.share_path.as_ref() {
             Some(path) => {
                 let last_library = LastLibrary {
@@ -168,7 +168,7 @@ impl Library {
         Ok(self._save_config(config_path)?)
     }
 
-    fn _save_config(&self, config_path: PathBuf) -> Result<bool, LibraryError> {
+    fn _save_config(&self, config_path: PathBuf) -> Result<bool> {
         match std::fs::exists(&config_path) {
             Ok(true) => {
                 match self.library_config.as_ref() {
@@ -179,23 +179,10 @@ impl Library {
                                 .create(true)
                                 .write(true)
                                 .truncate(true)
-                                .open(&config_path)
-                                .map_err(|e| {
-                                    LibraryError::with_source(
-                                        LibraryErrorKind::Io,
-                                        "The opening of the file failed!".to_string(),
-                                        Some(Box::new(e)),
-                                    )
-                                })?;
+                                .open(&config_path)?;
                             info!("Config file opened!");
 
-                            let content = toml::to_string(lib).map_err(|e| {
-                                LibraryError::with_source(
-                        LibraryErrorKind::Io,
-                        format!("An error occurred while trying to parse interal library to toml at {config_path:#?}"),
-                        Some(Box::new(e)),
-                            )
-                            })?;
+                            let content = toml::to_string(lib)?;
                             info!("Parsed version: {:#?}", content);
                             file.write_all(content.as_bytes())?;
                             file.flush()?;
@@ -205,12 +192,7 @@ impl Library {
                         let file_contents = read_to_string(config_path)?;
                         println!("Written version: {file_contents:#?}");
                     }
-                    None => {
-                        return Err(LibraryError::new(
-                            LibraryErrorKind::InvalidSharePath,
-                            format!("Library Config not found"),
-                        ))
-                    }
+                    None => return Err(LibraryError::InvalidSharePath)?,
                 }
                 Ok(true)
             }
@@ -223,23 +205,10 @@ impl Library {
                                 .create(true)
                                 .write(true)
                                 .truncate(true)
-                                .open(&config_path)
-                                .map_err(|e| {
-                                    LibraryError::with_source(
-                                        LibraryErrorKind::Io,
-                                        "The opening of the file failed!".to_string(),
-                                        Some(Box::new(e)),
-                                    )
-                                })?;
+                                .open(&config_path)?;
                             info!("Config file opened!");
 
-                            let content = toml::to_string(lib).map_err(|e| {
-                                LibraryError::with_source(
-                        LibraryErrorKind::Io,
-                        format!("An error occurred while trying to parse interal library to toml at {config_path:#?}"),
-                        Some(Box::new(e)),
-                            )
-                            })?;
+                            let content = toml::to_string(lib)?;
                             info!("Parsed version: {:#?}", content);
                             file.write_all(content.as_bytes())?;
                             file.flush()?;
@@ -250,20 +219,11 @@ impl Library {
                         let file_contents = read_to_string(config_path)?;
                         println!("Written version: {file_contents:#?}");
                     }
-                    None => {
-                        return Err(LibraryError::new(
-                            LibraryErrorKind::InvalidSharePath,
-                            format!("Library Config not found"),
-                        ))
-                    }
+                    None => return Err(LibraryError::InvalidSharePath)?,
                 }
                 Ok(false)
             }
-            Err(e) => Err(LibraryError::with_source(
-                LibraryErrorKind::Io,
-                format!("An error occurred while trying to look for {config_path:#?}"),
-                Some(Box::new(e)),
-            )),
+            Err(e) => Err(LibraryError::Io)?,
         }
     }
 
@@ -272,20 +232,17 @@ impl Library {
         Ok(())
     }
 
-    pub fn switch_or_create_lib(
-        self,
-        share_path: &std::path::PathBuf,
-    ) -> Result<Library, LibraryError> {
+    pub fn switch_or_create_lib(self, share_path: &std::path::PathBuf) -> Result<Library> {
         let lib = self._switch_or_create_lib(share_path)?;
         Ok(lib)
     }
 
-    pub fn delete(self) -> Result<(), LibraryError> {
+    pub fn delete(self) -> Result<()> {
         self._delete()?;
         Ok(())
     }
 
-    pub fn list_libraries() -> Result<Vec<String>, LibraryError> {
+    pub fn list_libraries() -> Result<Vec<String>> {
         let share_path = Library::create_or_validate_data_directory()?.join("hestia");
         info!("The share path to list libraries {share_path:#?}");
 
@@ -303,91 +260,18 @@ impl Library {
         //     .collect())
     }
 
-    async fn await_path_deleted(self, timeout: Duration) -> Result<(), LibraryError> {
-        let now = std::time::Instant::now();
-        loop {
-            match tokio::fs::try_exists(self.share_path.as_ref().ok_or(LibraryError::new(
-                LibraryErrorKind::Io,
-                "There is no share path provided.".to_string(),
-            ))?)
-            .await
-            {
-                Ok(false) => return Ok(()),
-                Ok(true) if now.elapsed() > timeout => {
-                    return Err(LibraryError::new(
-                        LibraryErrorKind::DeletionTimeout,
-                        "The deletion of the library timed out!".to_string(),
-                    ))
-                }
-                Ok(true) => tokio::task::yield_now().await,
-                Err(e) if now.elapsed() > timeout => {
-                    return Err(LibraryError::with_source(
-                        LibraryErrorKind::CreationTimeout,
-                        "The creation of the library timed out and path failed the verify!"
-                            .to_string(),
-                        Some(Box::new(e)),
-                    ))
-                }
-                Err(_) => tokio::task::yield_now().await,
-            }
-        }
-    }
-
-    async fn await_path_exists(&self, timeout: Duration) -> Result<(), LibraryError> {
-        let now = std::time::Instant::now();
-        loop {
-            match tokio::fs::try_exists(self.share_path.as_ref().ok_or(LibraryError::new(
-                LibraryErrorKind::Io,
-                "There is no share path provided.".to_string(),
-            ))?)
-            .await
-            {
-                Ok(true) => return Ok(()),
-                Ok(false) if now.elapsed() > timeout => {
-                    return Err(LibraryError::new(
-                        LibraryErrorKind::CreationTimeout,
-                        "The creation of the library timed out!".to_string(),
-                    ))
-                }
-                Ok(false) => tokio::task::yield_now().await,
-                Err(e) if now.elapsed() > timeout => {
-                    return Err(LibraryError::with_source(
-                        LibraryErrorKind::CreationTimeout,
-                        "The creation of the library timed out and path failed the verify!"
-                            .to_string(),
-                        Some(Box::new(e)),
-                    ))
-                }
-                Err(_) => tokio::task::yield_now().await,
-            }
-        }
-    }
-
-    pub fn _switch_or_create_lib(
-        mut self,
-        share_path: &std::path::PathBuf,
-    ) -> Result<Library, LibraryError> {
+    pub fn _switch_or_create_lib(mut self, share_path: &std::path::PathBuf) -> Result<Library> {
         info!("Trying to validate data home directory:");
-        println!("Trying to validate data home directory:");
         let datahome = Library::create_or_validate_data_directory()?;
-        println!("Data home directory has been verified successfully");
+        info!("Data home directory has been verified successfully");
         if !share_path.starts_with(&datahome) {
-            return Err(LibraryError::new(
-                LibraryErrorKind::InvalidSharePath,
-                format!("Path {share_path:#?} does not start with correct datahome {datahome:#?}"),
-            ));
+            return Err(LibraryError::InvalidSharePath)?;
         }
         println!("Share path starts with data home");
         match share_path.try_exists() {
             Ok(true) => (),
             Ok(false) => std::fs::create_dir_all(share_path)?,
-            Err(e) => {
-                return Err(LibraryError::with_source(
-                    LibraryErrorKind::InvalidSharePath,
-                    format!("The path {share_path:#?} is not a directory or could not be found"),
-                    Some(Box::new(e)),
-                ));
-            }
+            Err(e) => return Err(e)?,
         };
 
         let config_path = Library::open_or_create_config_file(share_path)?;
@@ -398,62 +282,37 @@ impl Library {
         let config_file = match std::fs::read(&config_path) {
             Ok(x) => x,
             Err(e) => {
-                return Err(LibraryError::with_source(
-                    LibraryErrorKind::ConfigCreationError,
-                    format!("Library Config {config_path:#?} cannot be loaded!"),
-                    Some(Box::new(e)),
-                ))
+                return Err(LibraryError::ConfigCreationError {
+                    error: e.to_string(),
+                })?
             }
         };
 
         let config_file_content = match str::from_utf8(&config_file) {
             Ok(x) => x,
             Err(e) => {
-                return Err(LibraryError::with_source(
-                    LibraryErrorKind::ConfigCreationError,
-                    format!("The file {config_path:#?} contains non utf-8 characters"),
-                    Some(Box::new(e)),
-                ));
+                return Err(LibraryError::ConfigCreationError {
+                    error: e.to_string(),
+                })?
             }
         };
 
-        let config_toml: LibraryConfig = toml::from_str(config_file_content)
-            .map_err(|e| {
-                LibraryError::with_source(
-                    LibraryErrorKind::ConfigCreationError,
-                    format!("Couldn't parse {config_path:#?} into TOML format"),
-                    Some(Box::new(e)),
-                )
-            })
-            .unwrap_or_default();
+        let config_toml: LibraryConfig = toml::from_str(config_file_content).unwrap_or_default();
 
         self.share_path = Some(share_path.to_owned());
         self.library_config = Some(config_toml);
         Ok(self)
     }
 
-    fn _delete(&self) -> Result<(), LibraryError> {
+    fn _delete(&self) -> Result<()> {
         if let Some(path) = self.share_path.as_deref() {
             match std::fs::exists(path) {
-                Ok(true) => std::fs::remove_dir_all(path).map_err(|e| {
-                    LibraryError::with_source(
-                        LibraryErrorKind::Io,
-                        format!("Failed to delete directory {path:#?}: {e:#?}"),
-                        Some(Box::new(e)),
-                    )
-                })?,
-                Ok(false) => {
-                    return Err(LibraryError::new(
-                        LibraryErrorKind::InvalidSharePath,
-                        format!("Could not find {path:#?}"),
-                    ))
-                }
+                Ok(true) => std::fs::remove_dir_all(path)?,
+                Ok(false) => return Err(LibraryError::InvalidSharePath)?,
                 Err(e) => {
-                    return Err(LibraryError::with_source(
-                        LibraryErrorKind::Io,
-                        format!("Error occurred while trying to path {path:#?}"),
-                        Some(Box::new(e)),
-                    ))
+                    return Err(LibraryError::ConfigDeletionError {
+                        error: e.to_string(),
+                    })?
                 }
             }
         }
@@ -461,15 +320,9 @@ impl Library {
     }
 
     //TODO: Refactor this into being a struct method and not static
-    fn open_or_create_config_file(share_path: &Path) -> Result<PathBuf, LibraryError> {
+    fn open_or_create_config_file(share_path: &Path) -> Result<PathBuf> {
         let config_path = share_path.join("config.toml");
-        let content = toml::to_string(&LibraryConfig::default()).map_err(|e| {
-            LibraryError::with_source(
-                LibraryErrorKind::Io,
-                format!("An error occurred while trying to parse toml at {config_path:#?}"),
-                Some(Box::new(e)),
-            )
-        })?;
+        let content = toml::to_string(&LibraryConfig::default())?;
         println!("{content:#?}");
         match std::fs::exists(&config_path) {
             Ok(true) => (),
@@ -483,19 +336,13 @@ impl Library {
                 file.flush()?;
                 file.sync_all()?;
             }
-            Err(e) => {
-                return Err(LibraryError::with_source(
-                    LibraryErrorKind::Io,
-                    format!("An error occurred while trying to look for {config_path:#?}"),
-                    Some(Box::new(e)),
-                ))
-            }
+            Err(e) => return Err(LibraryError::Io)?,
         }
         Ok(config_path)
     }
 
     //TODO: Refactor this into being a struct method and not static
-    fn open_or_create_database_file(share_path: &Path) -> Result<PathBuf, LibraryError> {
+    fn open_or_create_database_file(share_path: &Path) -> Result<PathBuf> {
         println!("Trying to open share path database");
         let db_path = share_path.join("db.sqlite");
         std::fs::OpenOptions::new()
