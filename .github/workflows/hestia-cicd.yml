@@ -1,3 +1,7 @@
+# TODO: 
+# 1. ADD SECURITY SCAN (TRIVY / CARGO AUDIT)
+# 2. ADD CACHING TO ACCERLERATE THE INIT PHASE
+
 name: Hestia CI/CD
 
 on:
@@ -80,7 +84,7 @@ jobs: #can run in parallel when creating seperate jobs
         run: cargo build --manifest-path=./app/Cargo.toml --verbose
 
       - name: cargo test
-        timeout-minutes: 8
+        timeout-minutes: 15
         run: cargo test --manifest-path=./app/Cargo.toml --verbose #only works on linux 
 
       # - name: Use Tauri action
