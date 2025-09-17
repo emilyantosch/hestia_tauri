@@ -4,4 +4,6 @@ use thiserror::Error;
 pub enum ScannerError {
     #[error("The scan of path {path} failed!")]
     PathScanFailedError { path: String },
+    #[error("The scan of path {path} failed!")]
+    DatabaseState { path: String },
 }
