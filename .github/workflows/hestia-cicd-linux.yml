@@ -17,8 +17,8 @@ jobs: #can run in parallel when creating seperate jobs
       fail-fast: false
       matrix:
         # os: [ubuntu-latest, macos-latest, windows-latest]
-        # os: [ubuntu-latest, windows-latest]
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, windows-latest]
+        # os: [ubuntu-latest]
 
     env:
       CARGO_TERM_COLOR: always
@@ -99,7 +99,7 @@ jobs: #can run in parallel when creating seperate jobs
 
       - name: deno run
         if: always()
-        timeout-minutes: 3
+        timeout-minutes: 5
         run: |
           cd app
           deno task tauri dev
