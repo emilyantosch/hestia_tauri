@@ -5,8 +5,9 @@ use std::path::Path;
 use tokio::fs as async_fs;
 use tracing::info;
 
-use crate::errors::{AppError, FileError};
-use crate::errors::{HashError, HashErrorKind};
+use anyhow::{Context, Result};
+
+use crate::errors::{FileError, HashError};
 use crate::file_system::FileId;
 
 #[derive(Debug)]
@@ -25,19 +26,16 @@ pub struct FolderHash {
 }
 
 impl FileHash {
-    pub async fn hash(path: &Path) -> Result<FileHash, FileError> {
+    pub async fn hash(path: &Path) -> Result<FileHash> {
         info!("Trying to extract file id for {path:#?}");
         let file_id = FileId::extract(path).await?;
 
         let content_hash = Self::hash_file_content(path).await?;
 
         let file_name = match path.file_name().and_then(|n| n.to_str()) {
-            Some(file_name) => Ok(file_name),
-            None => Err(HashError::new(
-                HashErrorKind::InvalidPathError,
-                format!("Could not find path: {:?}", path),
-            )),
-        }?;
+            Some(file_name) => file_name,
+            None => return Err(HashError::InvalidPathError)?,
+        };
 
         let identity_hash = Self::hash_identity(&content_hash, &file_id, file_name).await?;
 
@@ -48,19 +46,13 @@ impl FileHash {
         })
     }
 
-    pub async fn hash_file_content<T>(path: T) -> Result<Blake3Hash, HashError>
+    pub async fn hash_file_content<T>(path: T) -> Result<Blake3Hash>
     where
         T: AsRef<Path> + std::fmt::Debug + Clone,
     {
         let content = match async_fs::read(path.clone()).await {
             Ok(content) => content,
-            Err(e) => {
-                return Err(HashError::with_source(
-                    HashErrorKind::IoError,
-                    format!("Could not find path: {:?}", path),
-                    e,
-                ))
-            }
+            Err(e) => return Err(HashError::IoError)?,
         };
         let mut hasher = Hasher::new();
         hasher.update(&content);
@@ -71,7 +63,7 @@ impl FileHash {
         content_hash: &Blake3Hash,
         file_id: &FileId,
         file_name: &str,
-    ) -> Result<Blake3Hash, HashError> {
+    ) -> Result<Blake3Hash> {
         let mut hasher = Hasher::new();
 
         hasher.update(content_hash.as_bytes());
@@ -100,18 +92,15 @@ impl FileHash {
 
 impl FolderHash {
     #[async_recursion]
-    pub async fn hash(path: &Path) -> Result<FolderHash, FileError> {
+    pub async fn hash(path: &Path) -> Result<FolderHash> {
         let file_id = FileId::extract(path).await?;
 
         let (structure_hash, content_hash) = Self::_hash_folder(path).await?;
 
         let folder_name = match path.file_name().and_then(|n| n.to_str()) {
-            Some(folder_name) => Ok(folder_name),
-            None => Err(HashError::new(
-                HashErrorKind::InvalidPathError,
-                format!("Could not find path: {:?}", path),
-            )),
-        }?;
+            Some(folder_name) => folder_name,
+            None => return Err(HashError::InvalidPathError)?,
+        };
 
         let identity_hash =
             Self::hash_identity(&structure_hash, &content_hash, &file_id, folder_name).await?;
@@ -125,14 +114,8 @@ impl FolderHash {
     }
 
     #[async_recursion]
-    async fn _hash_folder(path: &Path) -> Result<(Blake3Hash, Blake3Hash), HashError> {
-        let mut entries = async_fs::read_dir(path).await.map_err(|e| {
-            HashError::with_source(
-                HashErrorKind::IoError,
-                format!("Async fs could not read directory at path: {:?}", path),
-                e,
-            )
-        })?;
+    async fn _hash_folder(path: &Path) -> Result<(Blake3Hash, Blake3Hash)> {
+        let mut entries = async_fs::read_dir(path).await?;
         let mut children: BTreeMap<String, (bool, Blake3Hash)> = BTreeMap::new();
         let mut all_content_hashes: Vec<Blake3Hash> = Vec::new();
 
@@ -142,29 +125,11 @@ impl FolderHash {
             let metadata = entry.metadata().await?;
 
             if metadata.is_file() {
-                let file_hash = FileHash::hash(&entry_path).await.map_err(|e| {
-                    HashError::with_source(
-                        HashErrorKind::IoError,
-                        format!(
-                            "The hash function failed at a lower level: {:?}",
-                            e.to_string()
-                        ),
-                        e,
-                    )
-                })?;
+                let file_hash = FileHash::hash(&entry_path).await?;
                 children.insert(entry_name, (false, file_hash.content_hash));
                 all_content_hashes.push(file_hash.content_hash);
             } else if metadata.is_dir() {
-                let folder_hash = FolderHash::hash(&entry_path).await.map_err(|e| {
-                    HashError::with_source(
-                        HashErrorKind::IoError,
-                        format!(
-                            "The hash function failed at a lower level: {:?}",
-                            e.to_string()
-                        ),
-                        e,
-                    )
-                })?;
+                let folder_hash = FolderHash::hash(&entry_path).await?;
                 children.insert(entry_name, (true, folder_hash.content_hash));
                 all_content_hashes.push(folder_hash.content_hash);
             }
@@ -179,9 +144,7 @@ impl FolderHash {
         Ok((structure_hash, content_hash))
     }
 
-    async fn hash_structure(
-        children: &BTreeMap<String, (bool, Blake3Hash)>,
-    ) -> Result<Blake3Hash, HashError> {
+    async fn hash_structure(children: &BTreeMap<String, (bool, Blake3Hash)>) -> Result<Blake3Hash> {
         let mut hasher = Hasher::new();
 
         for (name, (is_dir, _)) in children {
@@ -191,7 +154,7 @@ impl FolderHash {
         Ok(hasher.finalize())
     }
 
-    async fn hash_content(content_hashes: &mut [Blake3Hash]) -> Result<Blake3Hash, HashError> {
+    async fn hash_content(content_hashes: &mut [Blake3Hash]) -> Result<Blake3Hash> {
         let mut hasher = Hasher::new();
 
         content_hashes.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
@@ -207,7 +170,7 @@ impl FolderHash {
         content_hash: &Blake3Hash,
         file_id: &FileId,
         folder_name: &str,
-    ) -> Result<Blake3Hash, HashError> {
+    ) -> Result<Blake3Hash> {
         let mut hasher = Hasher::new();
 
         hasher.update(structure_hash.as_bytes());

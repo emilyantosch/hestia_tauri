@@ -693,7 +693,7 @@ impl FileOperations {
     pub async fn get_directory_state(
         &self,
         dir_path: &Path,
-    ) -> Result<HashMap<PathBuf, FileMetadata>, DbError> {
+    ) -> Result<HashMap<PathBuf, FileMetadata>> {
         let files = self.get_files_in_directory(dir_path).await?;
 
         let mut state = HashMap::new();
