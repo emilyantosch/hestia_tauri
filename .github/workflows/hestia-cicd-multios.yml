@@ -1,0 +1,94 @@
+name: Hestia CI/CD
+
+on:
+  push:
+    branches: [ "main", "dev", "test", "cicd" ]
+  pull_request:
+    branches: ["main", "dev", "test"]
+
+permissions:
+  contents: read
+
+jobs: #can run in parallel when creating seperate jobs
+  hestia-build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Setup cicd repository
+        uses: actions/checkout@v4
+
+      - name: Cache Deno dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.deno
+            ./app/deno.lock
+          key: ${{ runner.os }}-deno-${{ hashFiles('**/deno.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-deno-
+
+      - name: Cache Cargo dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ./app/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Initialize Deno environment
+        run: |
+          cd ./app
+          deno cache
+
+      - name: Use Tauri action
+        uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: ./app
+          distPath: ../dist
+
+      - name: Cargo Audit
+        run: cargo audit --manifest-path=./app/Cargo.toml
+
+      - name: Cargo Check
+        run: cargo check --manifest-path=./app/Cargo.toml --verbose
+
+      - name: Cargo Build
+        run: cargo build --manifest-path=./app/Cargo.toml --verbose
+
+      - name: Cargo Test
+        run: timeout 180s cargo test --manifest-path=./app/Cargo.toml --verbose
+
+      - name: Deno Format Check
+        run: deno fmt ./app/src --check
+
+      - name: Deno Lint
+        run: deno lint ./app/src
+
+      - name: Deno Frontend Build
+        run: |
+          cd ./app
+          deno task build
