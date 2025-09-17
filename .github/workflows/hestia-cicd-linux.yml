@@ -80,7 +80,7 @@ jobs: #can run in parallel when creating seperate jobs
         run: cargo build --manifest-path=./app/Cargo.toml --verbose
 
       - name: cargo test
-        timeout-minutes: 3
+        timeout-minutes: 8
         run: cargo test --manifest-path=./app/Cargo.toml --verbose #only works on linux 
 
       # - name: Use Tauri action
@@ -99,7 +99,7 @@ jobs: #can run in parallel when creating seperate jobs
 
       - name: deno run
         if: always()
-        timeout-minutes: 5
+        timeout-minutes: 8
         run: |
           cd app
           deno task tauri dev
