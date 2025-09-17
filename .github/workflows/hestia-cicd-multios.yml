@@ -59,20 +59,19 @@ jobs: #can run in parallel when creating seperate jobs
         with:
           deno-version: v2.x
 
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
-
       - name: Initialize Deno environment
         if: steps.cache-deno.outputs.cache-hit != 'true'
-        run: |
-          cd ./app
-          deno cache
+        run: deno cache src/main.tsx
+        working-directory: ./app
 
       - name: Use Tauri action
         uses: tauri-apps/tauri-action@v0
         with:
           projectPath: ./app
           distPath: ../dist
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
 
       - name: Cargo Check
         run: cargo check --manifest-path=./app/Cargo.toml --verbose
