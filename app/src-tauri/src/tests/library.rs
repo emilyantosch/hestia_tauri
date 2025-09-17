@@ -4,7 +4,7 @@ use crate::config::library::Library;
 async fn check_library_creation_successful() {
     let mut path = dirs::data_dir().unwrap().to_path_buf();
     path.push("hestia/test_lib/");
-    let lib = Library::new(path)
+    let lib = Library::new()
         .await
         .expect("Failed to allocate new Library");
     let lib_config = lib.library_config;
