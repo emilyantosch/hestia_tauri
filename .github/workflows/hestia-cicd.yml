@@ -82,11 +82,13 @@ jobs: #can run in parallel when creating seperate jobs
           deno install npm:auditjs
 
       - name: cargo security audit
+        if: always()
         run: |
           cd ./app
           cargo audit
 
       - name: nodejs security audit
+        if: always()
         run: |
           cd ./app
           npx auditjs ossi
@@ -96,6 +98,7 @@ jobs: #can run in parallel when creating seperate jobs
           echo "cargo version in use: $(cargo --version)"
 
       - name: cargo check
+        if: always()
         run: cargo check --manifest-path=./app/Cargo.toml --verbose
 
       - name: cargo build
