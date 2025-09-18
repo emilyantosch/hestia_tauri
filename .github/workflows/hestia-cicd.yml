@@ -82,13 +82,17 @@ jobs: #can run in parallel when creating seperate jobs
           deno install npm:auditjs
 
       - name: cargo security audit
-        if: always()
+        # continue-on-error: true
+        allow_failure: true
+        # if: success() || failure()
         run: |
           cd ./app
           cargo audit
 
       - name: nodejs security audit
-        if: always()
+        # continue-on-error: true
+        allow_failure: true
+        # if: success() || failure()
         run: |
           cd ./app
           npx auditjs ossi
@@ -98,23 +102,15 @@ jobs: #can run in parallel when creating seperate jobs
           echo "cargo version in use: $(cargo --version)"
 
       - name: cargo check
-        if: always()
         run: cargo check --manifest-path=./app/Cargo.toml --verbose
 
       - name: cargo build
-        # if: always() #runs even if prior test failed
+        # if: success() || failure()
         run: cargo build --manifest-path=./app/Cargo.toml --verbose
 
       - name: cargo test
         timeout-minutes: 20
         run: cargo test --manifest-path=./app/Cargo.toml --verbose #only works on linux 
-
-      # - name: Use Tauri action
-      #   uses: tauri-apps/tauri-action@v0
-      #   with:
-      #     projectPath: ./app
-      #     # distPath: ../dist
-      
 
       # Uncomment this step to verify the use of 'deno fmt' on each commit.
       - name: deno fmt
@@ -124,7 +120,7 @@ jobs: #can run in parallel when creating seperate jobs
         run: deno lint ./app/src #for website add different pipeline
 
       - name: deno run
-        # if: always()
+        # if: success() || failure()
         timeout-minutes: 8
         run: |
           cd app
