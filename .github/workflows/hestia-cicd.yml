@@ -72,16 +72,24 @@ jobs: #can run in parallel when creating seperate jobs
       #     targets: ${{ matrix.platform == 'macos-latest' || '' }}
 
       - name: Install cargo audit
-        run: cargo install cargo-audit
+        run: |
+          cd ./app
+          cargo install cargo-audit
         
       - name: install auditjs
-        run: deno install npm:auditjs
+        run: |
+          cd ./app
+          deno install npm:auditjs
 
       - name: cargo security audit
-        run: cargo audit
+        run: |
+          cd ./app
+          cargo audit
 
       - name: nodejs security audit
-        run: npx auditjs ossi
+        run: |
+          cd ./app
+          npx auditjs ossi
 
       - name: cargo version
         run: |
@@ -113,7 +121,7 @@ jobs: #can run in parallel when creating seperate jobs
         run: deno lint ./app/src #for website add different pipeline
 
       - name: deno run
-        if: always()
+        # if: always()
         timeout-minutes: 8
         run: |
           cd app
