@@ -71,6 +71,11 @@ jobs: #can run in parallel when creating seperate jobs
       #   with:
       #     targets: ${{ matrix.platform == 'macos-latest' || '' }}
 
+      - name: Install cargo audit
+        run: cargo install cargo-audit
+
+      - name: cargo audit
+        run: cargo audit
 
       - name: cargo version
         run: |
@@ -84,7 +89,7 @@ jobs: #can run in parallel when creating seperate jobs
         run: cargo build --manifest-path=./app/Cargo.toml --verbose
 
       - name: cargo test
-        timeout-minutes: 25
+        timeout-minutes: 20
         run: cargo test --manifest-path=./app/Cargo.toml --verbose #only works on linux 
 
       # - name: Use Tauri action
