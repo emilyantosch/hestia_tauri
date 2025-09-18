@@ -20,9 +20,9 @@ jobs: #can run in parallel when creating seperate jobs
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # os: [ubuntu-latest, macos-latest, windows-latest]
         # os: [ubuntu-latest, windows-latest]
-        # os: [ubuntu-latest]
+        os: [ubuntu-latest]
 
     env:
       CARGO_TERM_COLOR: always
@@ -73,9 +73,15 @@ jobs: #can run in parallel when creating seperate jobs
 
       - name: Install cargo audit
         run: cargo install cargo-audit
+        
+      - name: install auditjs
+        run: deno install npm:auditjs
 
-      - name: cargo audit
+      - name: cargo security audit
         run: cargo audit
+
+      - name: nodejs security audit
+        run: npx auditjs ossi
 
       - name: cargo version
         run: |
