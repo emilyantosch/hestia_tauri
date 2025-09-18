@@ -82,16 +82,14 @@ jobs: #can run in parallel when creating seperate jobs
           deno install npm:auditjs
 
       - name: cargo security audit
-        # continue-on-error: true
-        allow_failure: true
+        continue-on-error: true
         # if: success() || failure()
         run: |
           cd ./app
           cargo audit
 
       - name: nodejs security audit
-        # continue-on-error: true
-        allow_failure: true
+        continue-on-error: true
         # if: success() || failure()
         run: |
           cd ./app
