@@ -1,18 +1,7 @@
-use std::path::PathBuf;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::errors::{HashError, HashErrorKind};
-
-// #[derive(Debug, Error)]
-// pub struct FileError {
-//     pub kind: crate::errors::FileErrorKind,
-//     pub message: String,
-//     #[source]
-//     pub source: Option<Box<dyn std::error::Error + Send + Sync + 'static>>,
-//     pub paths: Option<Vec<PathBuf>>,
-// }
-
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Serialize, Deserialize)]
 pub enum FileError {
     #[error("Generic file error: {path}")]
     GenericError { path: String },

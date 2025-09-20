@@ -34,7 +34,7 @@ impl FileId {
     }
 
     #[cfg(target_family = "windows")]
-    fn open_file<P: AsRef<Path>>(path: P) -> Result<fs::File> {
+    fn open_file<P: AsRef<Path>>(path: P) -> Result<std::fs::File> {
         use std::{fs::OpenOptions, os::windows::fs::OpenOptionsExt};
         use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
 

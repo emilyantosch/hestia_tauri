@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::mpsc;
 use tracing::{error, info};
 
 use crate::{
@@ -13,8 +12,6 @@ use crate::{
     },
     utils::canon_path::CanonPath,
 };
-
-use sea_orm::DatabaseConnection;
 
 use migration::{Migrator, MigratorTrait};
 
@@ -106,7 +103,7 @@ impl AppState {
     }
 
     /// Reinitialize all components that depend on the database
-    async fn reinitialize_components(&mut self) -> Result<(), LibraryError> {
+    async fn reinitialize_components(&mut self) -> Result<()> {
         info!("Reinitializing components with new database connection");
 
         // Recreate file operations with new database manager
@@ -137,9 +134,7 @@ impl AppState {
         Ok(())
     }
 
-    pub async fn get_watched_folders_map(
-        &self,
-    ) -> Result<HashMap<String, WatchedFolderTree>, DbError> {
+    pub async fn get_watched_folders_map(&self) -> Result<HashMap<String, WatchedFolderTree>> {
         self.file_operations.get_watched_folder_map().await
     }
     /// Get library paths for scanning

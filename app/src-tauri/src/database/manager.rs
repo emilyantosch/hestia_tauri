@@ -5,7 +5,7 @@ use std::time::Duration;
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
 
 use crate::config::database::{DatabaseSettings, DatabaseType};
-use crate::errors::{DbError, DbErrorKind};
+use crate::errors::DbError;
 
 #[derive(Debug)]
 pub struct DatabaseManager {
@@ -94,19 +94,10 @@ impl DatabaseManager {
                 }
             }
             DatabaseType::None => {
-                return Err(DbError::new(
-                    DbErrorKind::ConfigurationError,
-                    "No database type configured".to_string(),
-                ));
+                return Err(DbError::ConfigurationError)?;
             }
         }
 
-        Database::connect(options).await.map_err(|e| {
-            DbError::with_source(
-                DbErrorKind::ConnectionError,
-                format!("Failed to connect to database: {}", e),
-                e,
-            )
-        })
+        Ok(Database::connect(options).await?)
     }
 }

@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Deserialize, Serialize)]
 pub enum HashError {
     #[error("An IO error occurred while trying to hash file or folder!")]
     IoError,

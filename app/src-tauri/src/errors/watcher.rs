@@ -8,4 +8,6 @@ pub enum WatcherError {
     Io(#[from] std::io::Error),
     #[error("The path to be watcher or that interacts with the watcher could not be found!")]
     PathNotFound,
+    #[error("The event emitted by the watcher is not recognized!")]
+    InvalidEventType,
 }

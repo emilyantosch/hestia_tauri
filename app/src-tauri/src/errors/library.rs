@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 // #[derive(Debug, Error)]
@@ -33,7 +33,7 @@ use thiserror::Error;
 //     }
 // }
 
-#[derive(Debug, Serialize, Error)]
+#[derive(Debug, Error)]
 pub enum LibraryError {
     #[error("The creation of the library has timed out!")]
     CreationTimeout,
@@ -51,4 +51,46 @@ pub enum LibraryError {
     LastLibraryNotFound,
     #[error("The OS has no known configuration for a data home directory!")]
     DataHomeNotFoundError,
+    #[error("The OS has no known configuration for a data home directory!")]
+    Internal(#[from] anyhow::Error),
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", content = "message")]
+#[serde(rename_all = "camelCase")]
+enum LibraryErrorKind {
+    CreationTimeout(String),
+    DeletionTimeout(String),
+    Io(String),
+    InvalidSharePath(String),
+    ConfigCreationError(String),
+    ConfigDeletionError(String),
+    LastLibraryNotFound(String),
+    DataHomeNotFoundError(String),
+    Internal(String),
+}
+
+impl Serialize for LibraryError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let error_message = self.to_string();
+        let error_kind = match self {
+            Self::CreationTimeout => LibraryErrorKind::CreationTimeout(error_message),
+            Self::DeletionTimeout => LibraryErrorKind::DeletionTimeout(error_message),
+            Self::Io => LibraryErrorKind::Io(error_message),
+            Self::InvalidSharePath => LibraryErrorKind::InvalidSharePath(error_message),
+            Self::ConfigCreationError { error } => {
+                LibraryErrorKind::ConfigCreationError(error_message)
+            }
+            Self::ConfigDeletionError { error } => {
+                LibraryErrorKind::ConfigDeletionError(error_message)
+            }
+            Self::LastLibraryNotFound => LibraryErrorKind::LastLibraryNotFound(error_message),
+            Self::DataHomeNotFoundError => LibraryErrorKind::DataHomeNotFoundError(error_message),
+            Self::Internal(_) => LibraryErrorKind::Internal(error_message),
+        };
+        error_kind.serialize(serializer)
+    }
 }

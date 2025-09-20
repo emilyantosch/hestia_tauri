@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use async_recursion::async_recursion;
+use anyhow::{Context, Result};
 use sea_orm::{ConnectionTrait, DatabaseConnection, PaginatorTrait};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -23,11 +23,14 @@ use entity::{files, folders, prelude::*};
 #[tauri::command]
 pub async fn get_watched_folders(
     app_state: State<'_, Mutex<AppState>>,
-) -> Result<HashMap<String, WatchedFolderTree>, DbError> {
+) -> Result<HashMap<String, WatchedFolderTree>, String> {
     info!("Getting watched folders");
     {
         let state = app_state.lock().await;
-        state.get_watched_folders_map().await
+        state.get_watched_folders_map().await.map_err(|e| {
+            let error = e.to_string();
+            format!("The watched folder map could not be returned {error}")
+        })
     }
 }
 

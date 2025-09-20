@@ -1,5 +1,5 @@
 use crate::database::FileOperations;
-use crate::errors::{AppError, AppErrorKind, FileError, WatcherError};
+use crate::errors::{AppError, AppErrorKind, FileError, HashError, WatcherError};
 use crate::file_system::{FileHash, FolderHash};
 use crate::utils::canon_path::CanonPath;
 use anyhow::{Context, Result};
@@ -42,7 +42,7 @@ impl From<FolderEvent> for FSEvent {
 
 #[async_trait::async_trait]
 pub trait FileWatcherEventHandler: Send + Sync {
-    async fn handle_event(&self, event: FSEvent) -> Result<(), AppError>;
+    async fn handle_event(&self, event: FSEvent) -> Result<()>;
 }
 
 pub struct DatabaseFileWatcherEventHandler {
@@ -51,7 +51,7 @@ pub struct DatabaseFileWatcherEventHandler {
 
 #[async_trait::async_trait]
 impl FileWatcherEventHandler for DatabaseFileWatcherEventHandler {
-    async fn handle_event(&self, event: FSEvent) -> Result<(), AppError> {
+    async fn handle_event(&self, event: FSEvent) -> Result<()> {
         FileWatcher::to_database(event, &self.db_operations).await
     }
 }
@@ -64,16 +64,11 @@ pub struct TestFileWatcherEventHandler {
 #[cfg(test)]
 #[async_trait::async_trait]
 impl FileWatcherEventHandler for TestFileWatcherEventHandler {
-    async fn handle_event(&self, event: FSEvent) -> Result<(), AppError> {
+    async fn handle_event(&self, event: FSEvent) -> Result<()> {
         info!("FileWatcher is sending event to test pipeline");
         let sender = self.sender.lock().await;
-        sender.send(event).map_err(|e| {
-            AppError::with_source(
-                AppErrorKind::FileError,
-                format!("FSEvent {e:#?} could not be sent"),
-                Some(Box::new(e)),
-            )
-        })
+        sender.send(event)?;
+        Ok(())
     }
 }
 
@@ -230,19 +225,10 @@ impl FileWatcher {
         match path.try_exists() {
             Ok(true) => (),
             Ok(false) => return Err(WatcherError::PathNotFound)?,
-            Err(e) => return Err(WatcherError::Io(e))?,
+            Err(e) => return Err(e)?,
         }
         if let Some(watcher) = self.watcher.as_mut() {
-            watcher
-                .watch(path.as_ref(), RecursiveMode::Recursive)
-                .map_err(|e| {
-                    FileError::with_source(
-                        FileErrorKind::WatchNotFoundError,
-                        format!("Failed to watch directory: {:?}", e.to_string()),
-                        e,
-                        Some(vec![path.clone().into()]),
-                    )
-                })?;
+            watcher.watch(path.as_ref(), RecursiveMode::Recursive)?;
         }
         match self.watched_paths.as_mut() {
             Some(paths) => {
@@ -261,27 +247,21 @@ impl FileWatcher {
         Ok(())
     }
 
-    async fn to_database(event: FSEvent, db_operations: &FileOperations) -> Result<(), AppError> {
+    async fn to_database(event: FSEvent, db_operations: &FileOperations) -> Result<()> {
         if let Some(file_event) = event.file_event {
             match file_event.kind {
                 EventKind::Create(_) | EventKind::Modify(_) => {
                     // File was created or modified, insert/update in database
                     match db_operations.upsert_file_from_event(&file_event).await {
                         Ok(file_model) => {
-                            println!(
+                            info!(
                                 "Successfully stored file: {} (ID: {})",
                                 file_model.path, file_model.id
                             );
                         }
                         Err(e) => {
-                            eprintln!("Failed to upsert file: {:?}", e);
-                            return Err(e).map_err(|e| {
-                                AppError::with_source(
-                                    AppErrorKind::FileError,
-                                    "Failed to upsert file".to_string(),
-                                    Some(Box::new(e)),
-                                )
-                            });
+                            error!("Failed to upsert file: {:?}", e);
+                            return Err(e)?;
                         }
                     }
                 }
@@ -292,33 +272,27 @@ impl FileWatcher {
                         match db_operations.delete_file_by_path(path).await {
                             Ok(deleted) => {
                                 if deleted {
-                                    println!(
+                                    info!(
                                         "Successfully removed file from database: {}",
                                         path.display()
                                     );
                                 } else {
-                                    println!(
+                                    info!(
                                         "File not found in database (already removed?): {}",
                                         path.display()
                                     );
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Failed to delete file from database: {:?}", e);
-                                return Err(e).map_err(|e| {
-                                    AppError::with_source(
-                                        AppErrorKind::FileError,
-                                        "Failed to upsert file".to_string(),
-                                        Some(Box::new(e)),
-                                    )
-                                });
+                                error!("Failed to delete file from database: {:?}", e);
+                                return Err(e)?;
                             }
                         }
                     }
                 }
                 _ => {
                     // Other event types (e.g., access) - we might not need to handle these
-                    println!("Ignoring event type: {:?}", file_event.kind);
+                    info!("Ignoring event type: {:?}", file_event.kind);
                 }
             }
         } else if let Some(folder_event) = event.folder_event {
@@ -327,20 +301,14 @@ impl FileWatcher {
                     // File was created or modified, insert/update in database
                     match db_operations.upsert_folder_from_event(&folder_event).await {
                         Ok(folder_model) => {
-                            println!(
+                            info!(
                                 "Successfully stored file: {} (ID: {})",
                                 folder_model.path, folder_model.id
                             );
                         }
                         Err(e) => {
-                            eprintln!("Failed to upsert file: {:?}", e);
-                            return Err(e).map_err(|e| {
-                                AppError::with_source(
-                                    AppErrorKind::FileError,
-                                    "Failed to upsert file".to_string(),
-                                    Some(Box::new(e)),
-                                )
-                            });
+                            error!("Failed to upsert file: {:?}", e);
+                            return Err(e)?;
                         }
                     }
                 }
@@ -350,48 +318,31 @@ impl FileWatcher {
                         match db_operations.delete_folder_by_path(path).await {
                             Ok(deleted) => {
                                 if deleted {
-                                    println!(
+                                    info!(
                                         "Successfully removed file from database: {}",
                                         path.display()
                                     );
                                 } else {
-                                    println!(
+                                    info!(
                                         "File not found in database (already removed?): {}",
                                         path.display()
                                     );
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Failed to delete file from database: {:?}", e);
-                                return Err(e).map_err(|e| {
-                                    AppError::with_source(
-                                        AppErrorKind::FileError,
-                                        "Failed to upsert file".to_string(),
-                                        Some(Box::new(e)),
-                                    )
-                                });
+                                error!("Failed to delete file from database: {:?}", e);
+                                return Err(e)?;
                             }
                         }
                     }
                 }
                 _ => {
                     // Other event types (e.g., access) - we might not need to handle these
-                    println!("Ignoring event type: {:?}", folder_event.kind);
+                    info!("Ignoring event type: {:?}", folder_event.kind);
                 }
             }
         } else {
-            let e = FileError::new(
-                FileErrorKind::GenericError,
-                "Could not extract FolderEvent or FileEvent".to_string(),
-                None,
-            );
-            return Err(e).map_err(|e| {
-                AppError::with_source(
-                    AppErrorKind::FileError,
-                    "Failed to upsert file".to_string(),
-                    Some(Box::new(e)),
-                )
-            });
+            return Err(WatcherError::InvalidEventType)?;
         }
         Ok(())
     }
@@ -400,16 +351,10 @@ impl FileWatcher {
 async fn to_file_or_folder_event_and_send(
     event: DebouncedEvent,
     processed_event_tx: &Sender<FSEvent>,
-) -> Result<(), AppError> {
+) -> Result<()> {
     let path = match event.paths.last() {
         Some(path) => path,
-        None => {
-            return Err(AppError::Categorized {
-                kind: AppErrorKind::FileError,
-                message: "Could not extract last paths. Were paths even provided?".to_string(),
-                source: None,
-            })
-        }
+        None => return Err(WatcherError::PathNotFound)?,
     };
 
     info!("Deciding handling based on event type for {event:#?}");
@@ -432,7 +377,7 @@ async fn to_file_or_folder_event_and_send(
 async fn to_file_event_and_send(
     event: DebouncedEvent,
     processed_event_tx: &Sender<FSEvent>,
-) -> Result<(), AppError> {
+) -> Result<()> {
     let kind = event.kind;
     let paths = event.paths.to_owned();
     let mut hash: Option<FileHash> = None;
@@ -442,27 +387,19 @@ async fn to_file_event_and_send(
         hash = Some(
             FileHash::hash(match &paths.last() {
                 Some(x) => x,
-                None => {
-                    return Err(AppError::Categorized {
-                kind: AppErrorKind::FileError,
-                message: String::from(
-                    "Error while trying to extract last path: There is no path to be extracted.",
-                ),
-                source: None,
-            });
-                }
+                None => return Err(HashError::InvalidPathError)?,
             })
             .await?,
         );
     }
 
     let file_event = FileEvent::new(event, kind, paths, hash);
-    println!("Constructed FileEvent from Raw Stream");
+    info!("Constructed FileEvent from Raw Stream");
 
     if let Err(e) = processed_event_tx.send(file_event.into()).await {
-        println!("Error sending processed event into channel: {e:#?}");
+        info!("Error sending processed event into channel: {e:#?}");
     } else {
-        println!("Sending processed event successful")
+        info!("Sending processed event successful")
     }
     Ok(())
 }
@@ -470,7 +407,7 @@ async fn to_file_event_and_send(
 async fn to_folder_event_and_send(
     event: DebouncedEvent,
     processed_event_tx: &Sender<FSEvent>,
-) -> Result<(), AppError> {
+) -> Result<()> {
     let kind = event.kind;
     let paths = event.paths.to_owned();
     let mut hash = None;
@@ -481,13 +418,7 @@ async fn to_folder_event_and_send(
             FolderHash::hash(match &paths.last() {
                 Some(x) => x,
                 None => {
-                    return Err(AppError::Categorized {
-                kind: AppErrorKind::FileError,
-                message: String::from(
-                    "Error while trying to extract last path: There is no path to be extracted.",
-                ),
-                source: None,
-            });
+                    return Err(HashError::InvalidPathError)?;
                 }
             })
             .await?,
@@ -495,12 +426,12 @@ async fn to_folder_event_and_send(
     }
 
     let folder_event = FolderEvent::new(event, kind, paths, hash);
-    println!("Constructed FileEvent from Raw Stream");
+    info!("Constructed FileEvent from Raw Stream");
 
     if let Err(e) = processed_event_tx.send(folder_event.into()).await {
-        println!("Error sending processed event into channel: {e:#?}");
+        info!("Error sending processed event into channel: {e:#?}");
     } else {
-        println!("Sending processed event successful")
+        info!("Sending processed event successful")
     }
     Ok(())
 }

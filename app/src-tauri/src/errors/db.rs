@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Deserialize, Serialize)]
 pub enum DbError {
     #[error("Database connection could not be established!")]
     ConnectionError,

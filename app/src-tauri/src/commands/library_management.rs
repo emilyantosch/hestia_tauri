@@ -1,7 +1,5 @@
 #![allow(dead_code)]
 
-use serde::Serialize;
-use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 use tokio::sync::Mutex;
@@ -9,10 +7,10 @@ use tracing::info;
 
 use crate::config::app::AppState;
 use crate::config::library::{Library, LibraryConfig, LibraryPathConfig};
-use crate::data::commands::watched_folders::WatchedFolderTree;
-use crate::errors::{LibraryError, LibraryErrorKind};
+use crate::errors::LibraryError;
 use crate::file_system::FileWatcherMessage;
 use crate::utils;
+use anyhow::{Context, Result};
 use tauri::State;
 
 #[tauri::command]
@@ -43,10 +41,7 @@ pub async fn select_library(
     let library_path = PathBuf::from(&path);
 
     if !library_path.exists() || !library_path.is_dir() {
-        return Err(LibraryError::new(
-            LibraryErrorKind::InvalidSharePath,
-            format!("The path {library_path:#?} is invalid!"),
-        ));
+        return Err(LibraryError::InvalidSharePath)?;
     }
 
     // Create the new library and switch to it
@@ -75,12 +70,7 @@ pub async fn create_new_library(
         .join(&name);
 
     match std::fs::exists(&share_path) {
-        Ok(true) => {
-            return Err(LibraryError::new(
-                LibraryErrorKind::InvalidSharePath,
-                "The share path already exists, creation aborted".to_string(),
-            ))
-        }
+        Ok(true) => return Err(LibraryError::InvalidSharePath),
         Ok(false) => (),
         Err(e) => {
             return Err(LibraryError::with_source(
