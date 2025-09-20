@@ -1,7 +1,7 @@
+use crate::data::file::File;
 use crate::data::internal::thumbnails::{ThumbnailGenerator, ThumbnailSize};
 use crate::database::thumbnail_repository::ThumbnailRepository;
 use crate::errors::{AppError, AppErrorKind, ThumbnailError};
-use crate::file_system::FileInfo;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -42,7 +42,7 @@ pub struct ProcessingStats {
 #[derive(Debug)]
 pub enum ThumbnailMessage {
     QueueFiles {
-        file_infos: Vec<FileInfo>,
+        file_infos: Vec<File>,
         sizes: Vec<ThumbnailSize>,
     },
     QueueSingleFile {
@@ -228,12 +228,8 @@ impl ThumbnailWorker {
                 );
                 self.handle_failed_job(job).await;
                 return Err(ThumbnailError::GenerationFailed {
-                    reason: format!(
-                        "Worker {} thumbnail generation timed out for file {}",
-                        self.worker_id, job.file_id
-                    ),
-                }
-                .into());
+                    reason: format!("Worker {} thumbnail generation timed out", self.worker_id),
+                })?;
             }
         }
 
@@ -324,7 +320,7 @@ impl ThumbnailProcessor {
         self
     }
 
-    pub async fn run(mut self) -> Result<(), AppError> {
+    pub async fn run(mut self) -> Result<()> {
         info!(
             "Starting ThumbnailProcessor with {} workers",
             self.config.worker_count
@@ -401,31 +397,31 @@ impl ThumbnailProcessor {
 
     async fn queue_files_for_processing(
         &mut self,
-        file_infos: Vec<FileInfo>,
+        file_infos: Vec<File>,
         sizes: Vec<ThumbnailSize>,
-    ) -> Result<usize, AppError> {
+    ) -> Result<usize> {
         let mut queue = self.job_queue.lock().await;
         let mut queued_count = 0;
 
         for file_info in file_infos {
             for &size in &sizes {
+                let file_id = match file_info.id {
+                    Some(id) => id,
+                    None => return Err(ThumbnailError::FileIdNotProvided)?,
+                };
                 // Check if thumbnail already exists
-                match self
-                    .repository
-                    .get_by_file_and_size(file_info.id, size)
-                    .await
-                {
+                match self.repository.get_by_file_and_size(file_id, size).await {
                     Ok(Some(_)) => {
                         debug!(
                             "Thumbnail already exists for file {} size {:?}",
-                            file_info.id, size
+                            file_id, size
                         );
                         continue;
                     }
                     Ok(None) => {
                         // Need to generate thumbnail
                         let job = ThumbnailJob {
-                            file_id: file_info.id,
+                            file_id: file_id,
                             file_path: file_info.path.clone(),
                             size,
                             status: ThumbnailJobStatus::Pending,
@@ -438,11 +434,11 @@ impl ThumbnailProcessor {
                     Err(e) => {
                         warn!(
                             "Failed to check existing thumbnail for file {}: {}",
-                            file_info.id, e
+                            file_id, e
                         );
                         // Queue anyway to be safe
                         let job = ThumbnailJob {
-                            file_id: file_info.id,
+                            file_id: file_id,
                             file_path: file_info.path.clone(),
                             size,
                             status: ThumbnailJobStatus::Pending,
@@ -586,35 +582,26 @@ impl ThumbnailProcessorHandler {
 
     pub async fn queue_files(
         &self,
-        file_infos: Vec<FileInfo>,
+        file_infos: Vec<File>,
         sizes: Vec<ThumbnailSize>,
-    ) -> Result<(), AppError> {
+    ) -> Result<()> {
         self.sender
-            .send(ThumbnailMessage::QueueFiles { file_infos, sizes })
-            .map_err(|e| AppError::Categorized {
-                kind: AppErrorKind::FileError,
-                message: format!("Failed to send queue files message: {}", e),
-                source: Some(Box::new(e)),
-            })
+            .send(ThumbnailMessage::QueueFiles { file_infos, sizes })?;
+        Ok(())
     }
 
     pub async fn queue_single_file(
         &self,
         file_id: i32,
-        file_path: String,
+        file_path: PathBuf,
         size: ThumbnailSize,
-    ) -> Result<(), AppError> {
-        self.sender
-            .send(ThumbnailMessage::QueueSingleFile {
-                file_id,
-                file_path,
-                size,
-            })
-            .map_err(|e| AppError::Categorized {
-                kind: AppErrorKind::FileError,
-                message: format!("Failed to send queue single file message: {}", e),
-                source: Some(Box::new(e)),
-            })
+    ) -> Result<()> {
+        self.sender.send(ThumbnailMessage::QueueSingleFile {
+            file_id,
+            file_path,
+            size,
+        })?;
+        Ok(())
     }
 
     pub async fn get_stats(&self) -> Result<ProcessingStats, AppError> {
@@ -663,4 +650,3 @@ impl ThumbnailProcessorHandler {
             })
     }
 }
-

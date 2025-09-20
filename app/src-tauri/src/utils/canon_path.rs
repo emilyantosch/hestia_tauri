@@ -1,4 +1,5 @@
-use crate::errors::{FileError, FileErrorKind, LibraryError};
+use crate::errors::FileError;
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -30,18 +31,16 @@ impl AsRef<Path> for CanonPath {
 }
 
 impl CanonPath {
-    pub fn try_exists(&self) -> Result<bool, FileError> {
+    pub fn try_exists(&self) -> Result<bool> {
         Ok(self.path.try_exists()?)
     }
 
-    pub fn as_str(&self) -> Result<&str, FileError> {
+    pub fn as_str(&self) -> Result<&str> {
         match self.path.to_str() {
             Some(str) => Ok(str),
-            None => Err(FileError::new(
-                FileErrorKind::PathNotFoundError,
-                "The path is invalid and could not be turned into a &str!".to_string(),
-                None,
-            )),
+            None => Err(FileError::PathNotFoundError {
+                path: self.path.to_string_lossy().to_string(),
+            })?,
         }
     }
 }

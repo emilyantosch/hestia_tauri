@@ -1,7 +1,8 @@
 use crate::database::FileOperations;
-use crate::errors::{AppError, AppErrorKind, FileError, FileErrorKind};
+use crate::errors::{AppError, AppErrorKind, FileError, WatcherError};
 use crate::file_system::{FileHash, FolderHash};
 use crate::utils::canon_path::CanonPath;
+use anyhow::{Context, Result};
 use notify::event::{CreateKind, EventKind, RemoveKind};
 use notify::{Error, RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{
@@ -117,14 +118,10 @@ impl FileWatcher {
     pub async fn init_watcher(
         &mut self,
         event_handler: Box<dyn FileWatcherEventHandler>,
-    ) -> Result<(), AppError> {
+    ) -> Result<()> {
         let (r_tx, mut r_rx) = tokio::sync::mpsc::channel(100);
         let rt = tokio::runtime::Handle::current();
         let (p_tx, mut p_rx) = tokio::sync::mpsc::channel::<FSEvent>(100);
-
-        //NOTE: This might need to get added back in if I need to see certain events happening in
-        //testing
-        //self.processed_event_receiver = Arc::new(Mutex::new(Some(p_rx)));
 
         let debouncer = new_debouncer(
             Duration::from_secs(2),
@@ -133,7 +130,7 @@ impl FileWatcher {
                 let r_tx_clone = r_tx.clone();
                 rt.spawn(async move {
                     if let Err(e) = r_tx_clone.send(result).await {
-                        println!("Error sending event result: {:?}", e);
+                        info!("Error sending event result: {:?}", e);
                     };
                 });
             },
@@ -145,12 +142,12 @@ impl FileWatcher {
                     Ok(events) => {
                         for event in events {
                             if let Err(e) = to_file_or_folder_event_and_send(event, &p_tx).await {
-                                eprintln!("Failed to process event: {:?}", e);
+                                error!("Failed to process event: {:?}", e);
                             }
                         }
                     }
                     Err(e) => {
-                        println!("errors: {:?}", e);
+                        error!("errors: {:?}", e);
                     }
                 }
             }
@@ -159,17 +156,17 @@ impl FileWatcher {
         tokio::spawn(async move {
             while let Some(event) = p_rx.recv().await {
                 if let Err(e) = event_handler.handle_event(event).await {
-                    eprintln!("Failed to store event to database: {:?}", e);
+                    error!("Failed to store event to database: {:?}", e);
                 }
             }
         });
 
         match debouncer {
             Ok(watcher) => {
-                println!("Init of FileWatcher completed successfully!");
+                info!("Init of FileWatcher completed successfully!");
                 self.watcher = Some(watcher);
             }
-            Err(e) => println!("{:?}", e),
+            Err(e) => error!("{:?}", e),
         };
         Ok(())
     }
@@ -182,20 +179,7 @@ impl FileWatcher {
         }
     }
 
-    pub async fn new_with_handler(
-        message_receiver: mpsc::UnboundedReceiver<FileWatcherMessage>,
-    ) -> std::result::Result<Self, Box<dyn std::error::Error>> {
-        Ok(Self {
-            watcher: None,
-            message_receiver,
-            watched_paths: None,
-        })
-    }
-
-    pub async fn run(
-        mut self,
-        event_handler: Box<dyn FileWatcherEventHandler>,
-    ) -> Result<(), AppError> {
+    pub async fn run(mut self, event_handler: Box<dyn FileWatcherEventHandler>) -> Result<()> {
         self.init_watcher(event_handler).await?;
         while let Some(res) = self.message_receiver.recv().await {
             match res {
@@ -219,25 +203,20 @@ impl FileWatcher {
         Ok(())
     }
 
-    pub async fn unwatch(&mut self, path: CanonPath) -> Result<(), AppError> {
+    pub async fn unwatch(&mut self, path: CanonPath) -> Result<()> {
         match self.watched_paths.as_mut() {
             Some(paths) => {
                 if paths.remove(&path) {
                     return Ok(());
                 }
-                Err(FileError::new(
-                    FileErrorKind::WatchNotFoundError,
-                    format!("The path {path:#?} is not being watched and cannot be unwatched"),
-                    Some(vec![path.into()]),
-                )
-                .into())
+                Err(WatcherError::PathNotWatched {
+                    path: path.as_str()?.to_string(),
+                })?
             }
-            None => Err(FileError::new(
-                FileErrorKind::PathNotFoundError,
-                "There is no path being watched, can't remove path from watch list.".to_string(),
-                None,
-            )
-            .into()),
+            None => Err(WatcherError::PathNotWatched {
+                path: path.as_str()?.to_string(),
+            })
+            .context("There is no path in the watched_paths vec, so nothing can be unwatched!"),
         }
     }
 
@@ -247,28 +226,11 @@ impl FileWatcher {
     //separately. This is true for each folder added to watcher, but also changes based on the
     //library that is currently being looked at. I assume we want to use different db files for
     //different vault configs.
-    pub async fn watch(&mut self, path: CanonPath) -> Result<(), AppError> {
+    pub async fn watch(&mut self, path: CanonPath) -> Result<()> {
         match path.try_exists() {
             Ok(true) => (),
-            Ok(false) => {
-                let error_path = vec![path.clone().into()];
-                return Err(FileError::new(
-                    FileErrorKind::PathNotFoundError,
-                    format!("Path could not be found: {path:?}"),
-                    Some(error_path),
-                )
-                .into());
-            }
-            Err(e) => {
-                let error_path = vec![path.clone().into()];
-                return Err(FileError::with_source(
-                    FileErrorKind::PathNotFoundError,
-                    format!("Path could not be found: {path:?}"),
-                    e,
-                    Some(error_path),
-                )
-                .into());
-            }
+            Ok(false) => return Err(WatcherError::PathNotFound)?,
+            Err(e) => return Err(WatcherError::Io(e))?,
         }
         if let Some(watcher) = self.watcher.as_mut() {
             watcher

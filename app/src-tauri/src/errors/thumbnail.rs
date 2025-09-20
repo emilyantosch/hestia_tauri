@@ -18,4 +18,7 @@ pub enum ThumbnailError {
 
     #[error("Thumbnail generation failed: {reason}")]
     GenerationFailed { reason: String },
+
+    #[error("File ID for thumbnail generation not provided")]
+    FileIdNotProvided,
 }
