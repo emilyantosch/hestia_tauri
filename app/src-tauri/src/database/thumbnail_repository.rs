@@ -1,3 +1,4 @@
+use entity::files;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -158,7 +159,7 @@ impl ThumbnailRepository {
     // ===== BATCH PROCESSING METHODS =====
 
     /// Get file IDs that don't have thumbnails for the specified size
-    pub async fn get_files_without_thumbnails(
+    pub async fn get_files_without_thumbnail_size(
         &self,
         size: ThumbnailSize,
         limit: Option<u64>,
@@ -190,6 +191,34 @@ impl ThumbnailRepository {
             .context("Failed to query files without thumbnails")?;
 
         Ok(file_ids)
+    }
+
+    pub async fn get_files_without_thumbnails_sizes(
+        &self,
+        sizes: Vec<ThumbnailSize>,
+        limit: Option<u64>,
+    ) -> Result<Vec<files::Model>> {
+        let db = self.database_manager.get_connection();
+
+        let sizes: Vec<String> = sizes.into_iter().map(|v| v.to_string()).collect();
+        // Build the query to find files without thumbnails of the specified size
+        let mut query = entity::files::Entity::find().filter(
+            entity::files::Column::Id.not_in_subquery(
+                Thumbnails::find()
+                    .select_only()
+                    .column(thumbnails::Column::FileId)
+                    .filter(thumbnails::Column::Size.is_in(sizes))
+                    .into_query(),
+            ),
+        );
+
+        if let Some(limit_value) = limit {
+            query = query.limit(limit_value);
+        }
+
+        let files = query.all(&*db).await?;
+
+        Ok(files)
     }
 
     /// Batch create thumbnails within a transaction

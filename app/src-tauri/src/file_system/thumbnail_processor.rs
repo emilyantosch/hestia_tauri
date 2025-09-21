@@ -463,11 +463,11 @@ impl ThumbnailProcessor {
     async fn queue_missing_files(&mut self) -> Result<usize> {
         let mut queued_jobs = 0;
         let all_thumbnail_sizes = ThumbnailSize::all().to_vec();
-        self.repository
-            .get_files_without_thumbnails(all_thumbnail_sizes, None)
+        let files = self.repository
+            .get_files_without_thumbnails_sizes(all_thumbnail_sizes, None)
             .await?;
 
-        self.queue_files_for_processing(vec![], ThumbnailSize::all().to_vec())
+        self.queue_files_for_processing(, ThumbnailSize::all().to_vec())
             .await
     }
     async fn queue_single_file(
