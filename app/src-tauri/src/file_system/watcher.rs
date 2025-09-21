@@ -1,5 +1,5 @@
 use crate::database::FileOperations;
-use crate::errors::{AppError, AppErrorKind, FileError, HashError, WatcherError};
+use crate::errors::{HashError, WatcherError};
 use crate::file_system::{FileHash, FolderHash};
 use crate::utils::canon_path::CanonPath;
 use anyhow::{Context, Result};

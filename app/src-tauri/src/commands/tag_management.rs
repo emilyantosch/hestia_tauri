@@ -4,11 +4,12 @@ use serde::{Deserialize, Serialize};
 use tauri::{command, State};
 
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, IntoActiveModel, QueryFilter, Set,
+    TransactionTrait,
 };
 
 use crate::config::app::AppState;
-use crate::errors::{DbError, DbErrorKind};
+use crate::errors::DbError;
 
 use entity::{file_has_tags, files, prelude::*, tags};
 
@@ -47,7 +48,7 @@ pub struct FileTagInfo {
 pub async fn create_tag(
     app_state: State<'_, Mutex<AppState>>,
     tag_name: String,
-) -> Result<TagInfo, String> {
+) -> Result<TagInfo, DbError> {
     let connection = {
         let state = app_state.lock().unwrap();
         state.database_manager.get_connection()
@@ -66,7 +67,7 @@ pub async fn create_tag(
             // Tag doesn't exist, continue with creation
         }
         Err(e) => {
-            return Err(format!("Database error checking existing tag: {}", e));
+            return Err(DbError::QueryError);
         }
     }
 
@@ -80,13 +81,13 @@ pub async fn create_tag(
 
     match new_tag.insert(&*connection).await {
         Ok(tag) => Ok(tag.into()),
-        Err(e) => Err(format!("Failed to create tag: {}", e)),
+        Err(e) => Err(DbError::InsertError),
     }
 }
 
 /// Get all tags
 #[command]
-pub async fn get_all_tags(app_state: State<'_, Mutex<AppState>>) -> Result<Vec<TagInfo>, String> {
+pub async fn get_all_tags(app_state: State<'_, Mutex<AppState>>) -> Result<Vec<TagInfo>, DbError> {
     let connection = {
         let state = app_state.lock().unwrap();
         state.database_manager.get_connection()
@@ -94,7 +95,7 @@ pub async fn get_all_tags(app_state: State<'_, Mutex<AppState>>) -> Result<Vec<T
 
     match Tags::find().all(&*connection).await {
         Ok(tags) => Ok(tags.into_iter().map(|t| t.into()).collect()),
-        Err(e) => Err(format!("Failed to get tags: {}", e)),
+        Err(e) => Err(DbError::QueryError),
     }
 }
 
@@ -103,7 +104,7 @@ pub async fn get_all_tags(app_state: State<'_, Mutex<AppState>>) -> Result<Vec<T
 pub async fn get_tag_by_id(
     app_state: State<'_, Mutex<AppState>>,
     tag_id: i32,
-) -> Result<Option<TagInfo>, String> {
+) -> Result<Option<TagInfo>, DbError> {
     let connection = {
         let state = app_state.lock().unwrap();
         state.database_manager.get_connection()
@@ -112,7 +113,7 @@ pub async fn get_tag_by_id(
     match Tags::find_by_id(tag_id).one(&*connection).await {
         Ok(Some(tag)) => Ok(Some(tag.into())),
         Ok(None) => Ok(None),
-        Err(e) => Err(format!("Failed to get tag: {}", e)),
+        Err(e) => Err(DbError::QueryError),
     }
 }
 
@@ -121,7 +122,7 @@ pub async fn get_tag_by_id(
 pub async fn get_tag_by_name(
     app_state: State<'_, Mutex<AppState>>,
     tag_name: String,
-) -> Result<Option<TagInfo>, String> {
+) -> Result<Option<TagInfo>, DbError> {
     let connection = {
         let state = app_state.lock().unwrap();
         state.database_manager.get_connection()
@@ -134,7 +135,7 @@ pub async fn get_tag_by_name(
     {
         Ok(Some(tag)) => Ok(Some(tag.into())),
         Ok(None) => Ok(None),
-        Err(e) => Err(format!("Failed to get tag by name: {}", e)),
+        Err(e) => Err(DbError::QueryError),
     }
 }
 

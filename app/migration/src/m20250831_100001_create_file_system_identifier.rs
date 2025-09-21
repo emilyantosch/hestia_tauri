@@ -23,10 +23,10 @@ impl MigrationTrait for Migration {
                     .table(FileSystemIdentifier::Table)
                     .if_not_exists()
                     .col(pk_auto(FileSystemIdentifier::Id))
-                    .col(integer(FileSystemIdentifier::Inode))
-                    .col(integer(FileSystemIdentifier::DeviceNum))
-                    .col(integer(FileSystemIdentifier::IndexNum))
-                    .col(integer(FileSystemIdentifier::VolumeSerialNum))
+                    .col(integer_null(FileSystemIdentifier::Inode))
+                    .col(integer_null(FileSystemIdentifier::DeviceNum))
+                    .col(integer_null(FileSystemIdentifier::IndexNum))
+                    .col(integer_null(FileSystemIdentifier::VolumeSerialNum))
                     .to_owned(),
             )
             .await?;
@@ -43,3 +43,4 @@ impl MigrationTrait for Migration {
         Ok(())
     }
 }
+

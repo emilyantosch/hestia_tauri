@@ -7,7 +7,7 @@ use tracing::info;
 
 use crate::config::app::AppState;
 use crate::config::library::{Library, LibraryConfig, LibraryPathConfig};
-use crate::errors::LibraryError;
+use crate::errors::{AppError, LibraryError, WatcherError};
 use crate::file_system::FileWatcherMessage;
 use crate::utils;
 use anyhow::{Context, Result};
@@ -72,21 +72,12 @@ pub async fn create_new_library(
     match std::fs::exists(&share_path) {
         Ok(true) => return Err(LibraryError::InvalidSharePath),
         Ok(false) => (),
-        Err(e) => {
-            return Err(LibraryError::with_source(
-                LibraryErrorKind::InvalidSharePath,
-                "Existance of the share path could not be verified".to_string(),
-                Some(Box::new(e)),
-            ))
-        }
+        Err(e) => return Err(LibraryError::InvalidSharePath),
     }
     //Parse path from string
     let path = PathBuf::from(&path);
     if !path.exists() || !path.is_dir() {
-        return Err(LibraryError::new(
-            LibraryErrorKind::InvalidSharePath,
-            "The library path is not valid!".to_string(),
-        ));
+        return Err(LibraryError::InvalidSharePath);
     }
     let file_name = path
         .file_name()
@@ -124,7 +115,7 @@ pub async fn create_new_library(
 #[tauri::command]
 pub async fn initialize_library_workspace(
     app_state: State<'_, Mutex<AppState>>,
-) -> Result<(), LibraryError> {
+) -> Result<(), AppError> {
     info!("Initializing library workspace");
 
     {
@@ -157,12 +148,7 @@ pub async fn initialize_library_workspace(
                     }
                 }
             }
-            None => {
-                return Err(LibraryError::new(
-                    LibraryErrorKind::ConfigCreationError,
-                    "The file watcher has not been created correctly".to_string(),
-                ))
-            }
+            None => return Err(AppError::WatcherNotFound)?,
         }
     }
 

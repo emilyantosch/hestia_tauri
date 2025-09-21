@@ -45,6 +45,8 @@ pub enum LibraryError {
     InvalidSharePath,
     #[error("The config for the library could not be created! Reason: {error}")]
     ConfigCreationError { error: String },
+    #[error("The config for the library could not be created!")]
+    ConfigCreationFailed,
     #[error("The config for the library could not be deleted! Reason: {error}")]
     ConfigDeletionError { error: String },
     #[error("There has been no last library detected, prompting for a new one...")]
@@ -84,6 +86,7 @@ impl Serialize for LibraryError {
             Self::ConfigCreationError { error } => {
                 LibraryErrorKind::ConfigCreationError(error_message)
             }
+            Self::ConfigCreationFailed => LibraryErrorKind::ConfigCreationError(error_message),
             Self::ConfigDeletionError { error } => {
                 LibraryErrorKind::ConfigDeletionError(error_message)
             }

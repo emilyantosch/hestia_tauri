@@ -886,8 +886,8 @@ impl FileOperations {
                 // Create new file system identifier
                 let new_fsi = file_system_identifier::ActiveModel {
                     id: sea_orm::ActiveValue::NotSet,
-                    inode: Set(inode_num),
-                    device_num: Set(device_id),
+                    inode: Set(Some(inode_num.try_into().unwrap_or(0))),
+                    device_num: Set(Some(device_id.try_into().unwrap_or(0))),
                     index_num: sea_orm::ActiveValue::NotSet,
                     volume_serial_num: sea_orm::ActiveValue::NotSet,
                 };
@@ -912,8 +912,8 @@ impl FileOperations {
                     id: sea_orm::ActiveValue::NotSet,
                     inode: sea_orm::ActiveValue::NotSet,
                     device_num: sea_orm::ActiveValue::NotSet,
-                    index_num: Set(file_index),
-                    volume_serial_num: Set(volume_serial_num),
+                    index_num: Set(Some(file_index.try_into().unwrap_or(0))),
+                    volume_serial_num: Set(Some(volume_serial_num.into())),
                 };
                 let created_fsi = new_fsi.insert(transaction).await?;
                 Ok(created_fsi.id)

@@ -1,88 +1,32 @@
-use std::fmt;
-
+use serde::Serialize;
 use thiserror::Error;
-
-use crate::errors::{DbError, FileError, HashError};
-
-impl PartialEq for AppErrorKind {
-    fn eq(&self, other: &Self) -> bool {
-        std::mem::discriminant(self) == std::mem::discriminant(other)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum AppErrorKind {
-    FileError,
-    DbError,
-    HashError,
-}
-
-impl std::fmt::Display for AppErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
 
 #[derive(Debug, Error)]
 pub enum AppError {
-    #[error("{kind}: {message}")]
-    Categorized {
-        kind: AppErrorKind,
-        message: String,
-        source: Option<Box<dyn std::error::Error + Send + Sync>>,
-    },
+    #[error("The file watcher could not be found!")]
+    WatcherNotFound,
+    #[error("An internal error has occurred: {0}")]
+    Internal(#[from] anyhow::Error),
 }
 
-impl From<HashError> for AppError {
-    fn from(hash_error: HashError) -> AppError {
-        AppError::Categorized {
-            kind: AppErrorKind::HashError,
-            message: hash_error.message.clone(),
-            source: Some(Box::new(hash_error)),
-        }
-    }
+#[derive(Serialize)]
+#[serde(tag = "kind", content = "message")]
+#[serde(rename_all = "camelCase")]
+enum AppErrorKind {
+    WatcherNotFound(String),
+    Internal(String),
 }
 
-impl From<FileError> for AppError {
-    fn from(file_error: FileError) -> AppError {
-        AppError::Categorized {
-            kind: AppErrorKind::FileError,
-            message: file_error.message.clone(),
-            source: Some(Box::new(file_error)),
-        }
-    }
-}
-
-impl From<DbError> for AppError {
-    fn from(db_error: DbError) -> AppError {
-        AppError::Categorized {
-            kind: AppErrorKind::DbError,
-            message: db_error.message.clone(),
-            source: Some(Box::new(db_error)),
-        }
-    }
-}
-
-impl AppError {
-    /// Create a new AppError with a source
-    pub fn with_source(
-        kind: AppErrorKind,
-        message: String,
-        source: Option<Box<dyn std::error::Error + Send + Sync>>,
-    ) -> Self {
-        AppError::Categorized {
-            kind,
-            message,
-            source,
-        }
-    }
-
-    /// Create a new AppError without a source
-    pub fn new(kind: AppErrorKind, message: String) -> Self {
-        AppError::Categorized {
-            kind,
-            message,
-            source: None,
-        }
+impl Serialize for AppError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let error_message = self.to_string();
+        let error_kind = match self {
+            Self::WatcherNotFound => AppErrorKind::WatcherNotFound(error_message),
+            Self::Internal(_) => AppErrorKind::Internal(error_message),
+        };
+        error_kind.serialize(serializer)
     }
 }

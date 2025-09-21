@@ -1,7 +1,7 @@
 use crate::data::file::File;
 use crate::data::internal::thumbnails::{ThumbnailGenerator, ThumbnailSize};
 use crate::database::thumbnail_repository::ThumbnailRepository;
-use crate::errors::{AppError, AppErrorKind, ThumbnailError};
+use crate::errors::{AppError, ThumbnailError};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -50,6 +50,7 @@ pub enum ThumbnailMessage {
         file_path: PathBuf,
         size: ThumbnailSize,
     },
+    QueueMissingFiles,
     GetStats {
         respond_to: oneshot::Sender<ProcessingStats>,
     },
@@ -361,6 +362,9 @@ impl ThumbnailProcessor {
                 } => {
                     self.queue_single_file(file_id, file_path, size).await?;
                 }
+                ThumbnailMessage::QueueMissingFiles => {
+                    self.queue_missing_files().await?;
+                }
                 ThumbnailMessage::GetStats { respond_to } => {
                     let stats = self.get_current_stats().await;
                     let _ = respond_to.send(stats);
@@ -456,12 +460,22 @@ impl ThumbnailProcessor {
         Ok(queued_count)
     }
 
+    async fn queue_missing_files(&mut self) -> Result<usize> {
+        let mut queued_jobs = 0;
+        let all_thumbnail_sizes = ThumbnailSize::all().to_vec();
+        self.repository
+            .get_files_without_thumbnails(all_thumbnail_sizes, None)
+            .await?;
+
+        self.queue_files_for_processing(vec![], ThumbnailSize::all().to_vec())
+            .await
+    }
     async fn queue_single_file(
         &mut self,
         file_id: i32,
         file_path: PathBuf,
         size: ThumbnailSize,
-    ) -> Result<(), AppError> {
+    ) -> Result<()> {
         // Check if thumbnail already exists
         match self.repository.get_by_file_and_size(file_id, size).await {
             Ok(Some(_)) => {
@@ -604,49 +618,25 @@ impl ThumbnailProcessorHandler {
         Ok(())
     }
 
-    pub async fn get_stats(&self) -> Result<ProcessingStats, AppError> {
+    pub async fn get_stats(&self) -> Result<ProcessingStats> {
         let (respond_to, response) = oneshot::channel();
 
         self.sender
-            .send(ThumbnailMessage::GetStats { respond_to })
-            .map_err(|e| AppError::Categorized {
-                kind: AppErrorKind::FileError,
-                message: format!("Failed to send get stats message: {}", e),
-                source: Some(Box::new(e)),
-            })?;
+            .send(ThumbnailMessage::GetStats { respond_to })?;
 
-        response.await.map_err(|e| AppError::Categorized {
-            kind: AppErrorKind::FileError,
-            message: format!("Failed to receive stats response: {}", e),
-            source: Some(Box::new(e)),
-        })
+        Ok(response.await?)
     }
 
-    pub async fn get_pending_count(&self) -> Result<usize, AppError> {
+    pub async fn get_pending_count(&self) -> Result<usize> {
         let (respond_to, response) = oneshot::channel();
 
         self.sender
-            .send(ThumbnailMessage::GetPendingCount { respond_to })
-            .map_err(|e| AppError::Categorized {
-                kind: AppErrorKind::FileError,
-                message: format!("Failed to send get pending count message: {}", e),
-                source: Some(Box::new(e)),
-            })?;
+            .send(ThumbnailMessage::GetPendingCount { respond_to })?;
 
-        response.await.map_err(|e| AppError::Categorized {
-            kind: AppErrorKind::FileError,
-            message: format!("Failed to receive pending count response: {}", e),
-            source: Some(Box::new(e)),
-        })
+        Ok(response.await?)
     }
 
-    pub async fn shutdown(&self) -> Result<(), AppError> {
-        self.sender
-            .send(ThumbnailMessage::Shutdown)
-            .map_err(|e| AppError::Categorized {
-                kind: AppErrorKind::FileError,
-                message: format!("Failed to send shutdown message: {}", e),
-                source: Some(Box::new(e)),
-            })
+    pub async fn shutdown(&self) -> Result<()> {
+        Ok(self.sender.send(ThumbnailMessage::Shutdown)?)
     }
 }

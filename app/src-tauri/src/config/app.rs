@@ -4,11 +4,12 @@ use tracing::{error, info};
 
 use crate::{
     config::library::Library,
-    data::watched_folders::WatchedFolderTree,
-    database::{DatabaseManager, FileOperations},
+    data::{thumbnails::ThumbnailGenerator, watched_folders::WatchedFolderTree},
+    database::{thumbnail_repository, DatabaseManager, FileOperations, ThumbnailRepository},
     errors::{DbError, LibraryError, ScannerError},
     file_system::{
         DatabaseFileWatcherEventHandler, DirectoryScanner, FileWatcher, FileWatcherHandler,
+        ThumbnailProcessor, ThumbnailProcessorHandler,
     },
     utils::canon_path::CanonPath,
 };
@@ -23,6 +24,7 @@ pub struct AppState {
     pub file_operations: FileOperations,
     pub directory_scanner: DirectoryScanner,
     pub file_watcher_handler: Option<FileWatcherHandler>,
+    pub thumbnail_processor_handler: Option<ThumbnailProcessorHandler>,
 }
 
 impl AppState {
@@ -42,12 +44,30 @@ impl AppState {
         // Load last library or create new one
         let library = Library::last_or_new();
 
+        // Create the thumbnail processor, which (I hope) is library-agnostic
+        let (thumbnail_processor_handler, thumbnail_msg_receiver) =
+            ThumbnailProcessorHandler::new();
+        let thumbnail_generator = ThumbnailGenerator::new();
+        let thumbnail_repository = ThumbnailRepository::new(Arc::clone(&database_manager));
+        let thumbnail_processor = ThumbnailProcessor::new(
+            thumbnail_msg_receiver,
+            Arc::new(thumbnail_repository),
+            Arc::new(thumbnail_generator),
+        );
+
+        tokio::spawn(async move {
+            if let Err(e) = thumbnail_processor.run().await {
+                error!("Thumbnail Engine failed to start properly! Reason: {e}");
+            }
+        });
+
         Ok(Self {
             library,
             database_manager,
             file_operations,
             directory_scanner,
             file_watcher_handler: None,
+            thumbnail_processor_handler: Some(thumbnail_processor_handler),
         })
     }
 
