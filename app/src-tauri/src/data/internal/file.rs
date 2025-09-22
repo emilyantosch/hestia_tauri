@@ -1,6 +1,7 @@
-use crate::errors::FileError;
 use crate::file_system::FileHash;
+use crate::{data::file, errors::FileError};
 use anyhow::{Context, Result};
+use entity::files;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -12,6 +13,22 @@ pub struct File {
     pub identity_hash: String,
     pub file_type_name: String,
     pub file_system_id: Option<i32>,
+}
+
+impl From<files::Model> for File {
+    fn from(value: files::Model) -> Self {
+        let path = PathBuf::from(&value.path);
+        let file_type_name = File::detect_file_type(&path.as_path());
+        File {
+            id: Some(value.id),
+            path,
+            name: value.name,
+            content_hash: value.content_hash,
+            identity_hash: value.identity_hash,
+            file_type_name,
+            file_system_id: Some(value.file_system_id),
+        }
+    }
 }
 
 impl File {

@@ -126,6 +126,8 @@ pub fn run() {
             commands::library_management::create_new_library,
             commands::library_management::list_available_library,
             commands::library_management::initialize_library_workspace,
+            // Library management
+            commands::thumbnail_service::generate_missing_thumbnails_for_library,
             //Utils
             commands::util::check_health,
             commands::util::select_folder,

@@ -118,7 +118,9 @@ export function LibrarySetup({ onLibraryCreated }: LibrarySetupProps) {
       await invoke("create_new_library", { name: newLibraryName.trim(), path });
       console.log("INFO: Created new library, refetching...");
       await invoke("initialize_library_workspace");
-      console.log("INFO: Reinitialzation of libraray workspace complete, finalizing...");
+      console.log("INFO: Reinitialzation of library workspace complete, finalizing...");
+      await invoke("generate_missing_thumbnails_for_library");
+      console.log("INFO: Generated missing thumbnails for library");
       onLibraryCreated();
     } catch (error) {
       console.error("Failed to create library:", error);
