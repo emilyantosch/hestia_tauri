@@ -10,48 +10,47 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
 import {
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { RiExpandUpDownLine, RiAddLine } from "@remixicon/react";
 
-export function TeamSwitcher({
-  teams,
+export function LibrarySwitcher({
+  libraries,
 }: {
-  teams: {
+  libraries: {
     name: string;
     logo: string;
   }[];
 }) {
-  const [activeTeam, setActiveTeam] = React.useState(teams[0] ?? null);
+  const [activeLibrary, setActiveLibrary] = React.useState(libraries[0] ?? null);
 
-  if (!teams.length) return null;
+  if (!libraries.length) return null;
 
   return (
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground gap-3 [&>svg]:size-auto"
+            <button 
+              className="peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-hidden ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 h-12 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground [&>svg]:size-auto"
             >
               <div className="flex aspect-square size-9 items-center justify-center rounded-md overflow-hidden bg-sidebar-primary text-sidebar-primary-foreground relative after:rounded-[inherit] after:absolute after:inset-0 after:shadow-[0_1px_2px_0_rgb(0_0_0/.05),inset_0_1px_0_0_rgb(255_255_255/.12)] after:pointer-events-none">
-                {activeTeam && (
+                {activeLibrary && (
                   <img
-                    src={activeTeam.logo}
+                    src={activeLibrary.logo}
                     width={36}
                     height={36}
-                    alt={activeTeam.name}
+                    alt={activeLibrary.name}
                   />
                 )}
               </div>
               <div className="grid flex-1 text-left text-base leading-tight">
                 <span className="truncate font-medium">
-                  {activeTeam?.name ?? "Select a Team"}
+                  {activeLibrary?.name ?? "Select a Library"}
                 </span>
               </div>
               <RiExpandUpDownLine
@@ -59,36 +58,38 @@ export function TeamSwitcher({
                 size={20}
                 aria-hidden="true"
               />
-            </SidebarMenuButton>
+            </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            className="dark w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-md"
-            align="start"
-            side="bottom"
-            sideOffset={4}
-          >
+          <DropdownMenuPortal>
+            <DropdownMenuContent
+              className="w-56 min-w-56 rounded-md z-50"
+              align="start"
+              side="bottom"
+              sideOffset={4}
+            >
             <DropdownMenuLabel className="uppercase text-muted-foreground/70 text-xs">
-              Teams
+              Libraries
             </DropdownMenuLabel>
-            {teams.map((team, index) => (
+            {libraries.map((library, index) => (
               <DropdownMenuItem
-                key={team.name}
-                onClick={() => setActiveTeam(team)}
+                key={library.name}
+                onClick={() => setActiveLibrary(library)}
                 className="gap-2 p-2"
               >
                 <div className="flex size-6 items-center justify-center rounded-md overflow-hidden">
-                  <img src={team.logo} width={36} height={36} alt={team.name} />
+                  <img src={library.logo} width={36} height={36} alt={library.name} />
                 </div>
-                {team.name}
+                {library.name}
                 <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem className="gap-2 p-2">
               <RiAddLine className="opacity-60" size={16} aria-hidden="true" />
-              <div className="font-medium">Add team</div>
+              <div className="font-medium">Add library</div>
             </DropdownMenuItem>
-          </DropdownMenuContent>
+            </DropdownMenuContent>
+          </DropdownMenuPortal>
         </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>

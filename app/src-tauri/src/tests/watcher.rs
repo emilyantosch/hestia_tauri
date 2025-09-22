@@ -40,14 +40,12 @@ async fn run_test_watcher() -> Result<
         .ok(); // Ignore errors if already initialize
     let (fw_sender, fw_receiver) = tokio::sync::mpsc::unbounded_channel::<FileWatcherMessage>();
     let (fw_event_sender, fw_event_receiver) = tokio::sync::mpsc::unbounded_channel::<FSEvent>();
-    let fw_event_handler = Arc::new(TestFileWatcherEventHandler {
+    let fw_event_handler = TestFileWatcherEventHandler {
         sender: Arc::new(Mutex::new(fw_event_sender)),
-    });
-    let watcher = FileWatcher::new_with_handler(fw_event_handler, fw_receiver)
-        .await
-        .expect("Failed to create watcher");
+    };
+    let watcher = FileWatcher::new(fw_receiver);
     tokio::spawn(async move {
-        let _ = watcher.run().await;
+        let _ = watcher.run(Box::new(fw_event_handler)).await;
     });
     Ok((fw_sender, fw_event_receiver))
 }

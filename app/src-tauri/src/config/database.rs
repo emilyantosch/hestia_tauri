@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
 use aes_gcm::{aead::Aead, Aes256Gcm, Key, KeyInit, Nonce};
@@ -10,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use sea_orm::sqlx::sqlite::{SqliteJournalMode, SqliteSynchronous};
 
-use crate::errors::{ConfigError, ConfigErrorKind};
+use crate::errors::{ConfigError, ConfigErrorKind, DbError};
 
 pub struct DatabaseSettings {
     pub db_type: DatabaseType,
@@ -543,13 +544,13 @@ impl DatabaseSettings {
         }
     }
 
-    pub fn get_connection_string(&self) -> Result<String, String> {
+    pub fn get_connection_string(&self) -> Result<String> {
         match self.db_type {
             DatabaseType::Sqlite => {
                 if let Some(config) = &self.sqlite_config {
                     Ok(config.con_string.clone())
                 } else {
-                    Err("SQLite configuration is missing".to_string())
+                    Err(DbError::ConfigurationError)?
                 }
             }
             DatabaseType::Postgres => {
@@ -573,10 +574,12 @@ impl DatabaseSettings {
                         ssl_param
                     ))
                 } else {
-                    Err("PostgreSQL configuration is missing".to_string())
+                    Err(DbError::ConfigurationError)?
                 }
             }
-            DatabaseType::None => Err("No database type configured".to_string()),
+            DatabaseType::None => {
+                Err(DbError::ConfigurationError).context("The is no database type selected!")
+            }
         }
     }
 

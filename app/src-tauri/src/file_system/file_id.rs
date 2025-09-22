@@ -1,4 +1,4 @@
-use crate::errors::{FileError, FileErrorKind};
+use anyhow::{Context, Result};
 use std::path::Path;
 
 #[derive(Debug)]
@@ -14,18 +14,12 @@ pub enum FileId {
 }
 impl FileId {
     #[cfg(target_family = "unix")]
-    pub async fn extract(path: impl AsRef<Path>) -> Result<Self, FileError> {
-        use crate::errors::FileError;
+    pub async fn extract(path: impl AsRef<Path>) -> Result<Self> {
         use std::os::unix::fs::MetadataExt;
 
-        let metadata = tokio::fs::metadata(path.as_ref()).await.map_err(|e| {
-            FileError::with_source(
-                FileErrorKind::FileIdExtractionError,
-                format!("The FileId could not get extracted: {:?}", e.to_string()),
-                e,
-                Some(vec![path.as_ref().into()]),
-            )
-        })?;
+        let metadata = tokio::fs::metadata(path.as_ref())
+            .await
+            .context("Failed to extract file metadata for file_id extraction on UNIX!")?;
 
         Ok(FileId::Inode {
             device_id: metadata.dev(),
@@ -40,7 +34,7 @@ impl FileId {
     }
 
     #[cfg(target_family = "windows")]
-    fn open_file<P: AsRef<Path>>(path: P) -> Result<fs::File> {
+    fn open_file<P: AsRef<Path>>(path: P) -> Result<std::fs::File> {
         use std::{fs::OpenOptions, os::windows::fs::OpenOptionsExt};
         use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
 

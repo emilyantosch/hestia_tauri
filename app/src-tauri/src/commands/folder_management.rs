@@ -1,57 +1,37 @@
-use async_recursion::async_recursion;
-use sea_orm::PaginatorTrait;
+#![allow(dead_code)]
+use anyhow::{Context, Result};
+use sea_orm::{ConnectionTrait, DatabaseConnection, PaginatorTrait};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::{command, State};
 
+use tracing::info;
+
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set};
 
 use super::file_operations::FileInfo;
-use crate::{database::DatabaseManager, errors::file};
+use crate::data::folder_info::FolderInfo;
+use crate::data::watched_folders::WatchedFolderTree;
+use crate::{config::app::AppState, errors::DbError};
 
-use crate::database::FileOperations;
 use entity::{files, folders, prelude::*};
 
-/// Folder information for frontend display
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FolderInfo {
-    pub id: i32,
-    pub name: String,
-    pub path: String,
-    pub parent_folder_id: Option<i32>,
-    pub content_hash: String,
-    pub identity_hash: String,
-    pub structure_hash: String,
-    pub file_system_id: i32,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-impl From<folders::Model> for FolderInfo {
-    fn from(folder: folders::Model) -> Self {
-        Self {
-            id: folder.id,
-            name: folder.name,
-            path: folder.path,
-            parent_folder_id: folder.parent_folder_id,
-            content_hash: folder.content_hash,
-            identity_hash: folder.identity_hash,
-            structure_hash: folder.structure_hash,
-            file_system_id: folder.file_system_id,
-            created_at: folder.created_at.to_string(),
-            updated_at: folder.updated_at.to_string(),
-        }
+/// Get all folder and subfolders being watched for the frontend to display
+#[tauri::command]
+pub async fn get_watched_folders(
+    app_state: State<'_, Mutex<AppState>>,
+) -> Result<HashMap<String, WatchedFolderTree>, String> {
+    info!("Getting watched folders");
+    {
+        let state = app_state.lock().await;
+        state.get_watched_folders_map().await.map_err(|e| {
+            let error = e.to_string();
+            format!("The watched folder map could not be returned {error}")
+        })
     }
-}
-
-/// Folder structure with children
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FolderTree {
-    pub folder: FolderInfo,
-    pub children: Vec<FolderTree>,
-    pub files: Vec<FileInfo>,
 }
 
 /// Folder content summary
@@ -67,9 +47,12 @@ pub struct FolderSummary {
 /// Get all folders
 #[command]
 pub async fn get_all_folders(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
 ) -> Result<Vec<FolderInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().await;
+        state.database_manager.get_connection()
+    };
 
     match folders::Entity::find().all(&*connection).await {
         Ok(folders) => Ok(folders.into_iter().map(|f| f.into()).collect()),
@@ -80,10 +63,13 @@ pub async fn get_all_folders(
 /// Get folder by ID
 #[command]
 pub async fn get_folder_by_id(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     folder_id: i32,
 ) -> Result<Option<FolderInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().await;
+        state.database_manager.get_connection()
+    };
 
     match folders::Entity::find_by_id(folder_id)
         .one(&*connection)
@@ -98,10 +84,13 @@ pub async fn get_folder_by_id(
 /// Get folder by path
 #[command]
 pub async fn get_folder_by_path(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     folder_path: String,
 ) -> Result<Option<FolderInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().await;
+        state.database_manager.get_connection()
+    };
 
     match folders::Entity::find()
         .filter(folders::Column::Path.eq(&folder_path))
@@ -117,9 +106,12 @@ pub async fn get_folder_by_path(
 /// Get root folders (folders with no parent)
 #[command]
 pub async fn get_root_folders(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
 ) -> Result<Vec<FolderInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().await;
+        state.database_manager.get_connection()
+    };
 
     match folders::Entity::find()
         .filter(folders::Column::ParentFolderId.is_null())
@@ -134,10 +126,13 @@ pub async fn get_root_folders(
 /// Get subfolders of a folder
 #[command]
 pub async fn get_subfolders(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     parent_folder_id: i32,
 ) -> Result<Vec<FolderInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().await;
+        state.database_manager.get_connection()
+    };
 
     match folders::Entity::find()
         .filter(folders::Column::ParentFolderId.eq(parent_folder_id))
@@ -152,10 +147,13 @@ pub async fn get_subfolders(
 /// Get files in a folder
 #[command]
 pub async fn get_files_in_folder(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     folder_path: String,
 ) -> Result<Vec<FileInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().await;
+        state.database_manager.get_connection()
+    };
 
     // Get files that are directly in this folder path
     let pattern = format!("{}%", folder_path);
@@ -185,99 +183,16 @@ pub async fn get_files_in_folder(
     }
 }
 
-/// Get folder tree structure starting from a root folder
-#[command]
-pub async fn get_folder_tree(
-    file_operations: State<'_, Arc<FileOperations>>,
-    root_folder_id: Option<i32>,
-) -> Result<Vec<FolderTree>, String> {
-    // Get root folders if no specific root is provided
-    let root_folders = if let Some(root_id) = root_folder_id {
-        match file_operations.find_folder_by_id(root_id).await {
-            Ok(Some(folder)) => vec![folder],
-            Ok(None) => return Err("Root folder not found".to_string()),
-            Err(e) => return Err(format!("Failed to get root folder: {}", e)),
-        }
-    } else {
-        match file_operations.find_root_folders().await {
-            Ok(folders) => folders,
-            Err(e) => return Err(format!("Failed to get root folders: {}", e)),
-        }
-    };
-
-    // Build tree for each root folder
-    let mut trees = Vec::new();
-    for root_folder in root_folders {
-        match build_folder_tree(&file_operations, root_folder).await {
-            Ok(tree) => trees.push(tree),
-            Err(e) => return Err(format!("Failed to build folder tree: {}", e)),
-        }
-    }
-    Ok(trees)
-}
-
-/// Recursive function to build folder tree
-#[async_recursion]
-async fn build_folder_tree(
-    file_operations: &State<'_, Arc<FileOperations>>,
-    folder: folders::Model,
-) -> Result<FolderTree, String> {
-    let folder_id = folder.id;
-    let folder_path = folder.path.clone();
-
-    // Get subfolders
-    let subfolders = match file_operations.find_subfolders_of_folder(folder_id).await {
-        Ok(subfolder) => subfolder,
-        Err(e) => return Err(format!("Failed to get subfolders: {}", e)),
-    };
-
-    // Build trees for subfolders
-    let mut children = Vec::new();
-    for subfolder in subfolders {
-        match build_folder_tree(file_operations, subfolder).await {
-            Ok(child_tree) => children.push(child_tree),
-            Err(e) => return Err(format!("Failed to build child tree: {}", e)),
-        }
-    }
-
-    // Get files in this folder
-    let folder_path_path = Path::new(&folder_path);
-    let files = match file_operations
-        .get_files_in_directory(folder_path_path)
-        .await
-    {
-        Ok(files) => {
-            // Filter to only include direct children
-            files
-                .into_iter()
-                .filter(|file| {
-                    let file_path = PathBuf::from(&file.path);
-                    if let Some(parent) = file_path.parent() {
-                        parent == folder_path_path
-                    } else {
-                        false
-                    }
-                })
-                .map(|f| f.into())
-                .collect()
-        }
-        Err(e) => return Err(format!("Failed to get files in folder: {}", e)),
-    };
-
-    Ok(FolderTree {
-        folder: folder.into(),
-        children,
-        files,
-    })
-}
-
 /// Get folder summary with statistics
 #[command]
 pub async fn get_folder_summary(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     folder_path: String,
 ) -> Result<FolderSummary, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().await;
+        state.database_manager.get_connection()
+    };
 
     // Get folder info
     let folder = match folders::Entity::find()
@@ -355,10 +270,13 @@ pub async fn get_folder_summary(
 /// Search folders by name pattern
 #[command]
 pub async fn search_folders_by_name(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     search_pattern: String,
 ) -> Result<Vec<FolderInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().await;
+        state.database_manager.get_connection()
+    };
 
     let pattern = format!("%{}%", search_pattern);
 
@@ -375,10 +293,13 @@ pub async fn search_folders_by_name(
 /// Get folder path hierarchy (breadcrumb)
 #[command]
 pub async fn get_folder_path_hierarchy(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
     folder_id: i32,
 ) -> Result<Vec<FolderInfo>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().await;
+        state.database_manager.get_connection()
+    };
 
     let mut hierarchy = Vec::new();
     let mut current_folder_id = Some(folder_id);
@@ -406,9 +327,12 @@ pub async fn get_folder_path_hierarchy(
 /// Delete empty folders
 #[command]
 pub async fn delete_empty_folders(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
 ) -> Result<Vec<String>, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().await;
+        state.database_manager.get_connection()
+    };
 
     // Get all folders
     let all_folders = match folders::Entity::find().all(&*connection).await {
@@ -457,9 +381,12 @@ pub async fn delete_empty_folders(
 /// Get folder statistics
 #[command]
 pub async fn get_folder_statistics(
-    db_manager: State<'_, Arc<DatabaseManager>>,
+    app_state: State<'_, Mutex<AppState>>,
 ) -> Result<serde_json::Value, String> {
-    let connection = db_manager.get_connection();
+    let connection = {
+        let state = app_state.lock().await;
+        state.database_manager.get_connection()
+    };
 
     let total_folders = match folders::Entity::find().count(&*connection).await {
         Ok(count) => count,

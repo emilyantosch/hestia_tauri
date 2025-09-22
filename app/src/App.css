@@ -4,35 +4,35 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.92 0.02 80.68);
+  --background: oklch(0.9838 0.015858 82.7923);
   --foreground: oklch(0.32 0.02 82.81);
-  --card: oklch(0.92 0.02 80.68);
+  --card: oklch(0.95 0.02 76.18);
   --card-foreground: oklch(0.22 0.00 106.56);
-  --popover: oklch(1.00 0 0);
+  --popover: oklch(0.55 0.17 29.01);
   --popover-foreground: oklch(0.25 0.02 79.45);
-  --primary: oklch(0.55 0.17 29.01);
+  --primary: oklch(0.55 0.2 29.01);
   --primary-foreground: oklch(1.00 0 0);
-  --secondary: oklch(0.86 0.02 75.83);
+  --secondary: oklch(0.948 0.0148 80.71);
   --secondary-foreground: oklch(0.40 0.02 86.89);
-  --muted: oklch(0.87 0.03 76.18);
+  --muted: oklch(0.948 0.02 80.71);
   --muted-foreground: oklch(0.56 0.01 84.58);
-  --accent: oklch(0.86 0.02 75.83);
+  --accent: oklch(0.82 0.03 76.18);
   --accent-foreground: oklch(0.25 0.02 79.45);
   --destructive: oklch(0.22 0.00 106.56);
   --destructive-foreground: oklch(1.00 0 0);
-  --border: oklch(0.82 0.01 81.79);
-  --input: oklch(0.70 0.02 84.59);
+  --border: oklch(0.82 0.01 76.18);
+  --input: oklch(0.70 0.02 76.18);
   --ring: oklch(0.63 0.14 238.33);
   --chart-1: oklch(0.49 0.15 31.87);
   --chart-2: oklch(0.58 0.23 277.75);
   --chart-3: oklch(0.82 0.04 77.57);
   --chart-4: oklch(0.78 0.08 289.33);
   --chart-5: oklch(0.50 0.16 31.59);
-  --sidebar: oklch(0.90 0.02 84.59);
+  --sidebar: oklch(0.948 0.02 80.71);
   --sidebar-foreground: oklch(0.34 0.01 106.67);
-  --sidebar-primary: oklch(0.55 0.17 29.01);
+  --sidebar-primary: oklch(0.55 0.2 29.01);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.86 0.02 75.83);
+  --sidebar-accent: oklch(0.82 0.03 76.18);
   --sidebar-accent-foreground: oklch(0.33 0 0);
   --sidebar-border: oklch(0.94 0 0);
   --sidebar-ring: oklch(0.77 0 0);
@@ -160,6 +160,73 @@
 
 body {
   letter-spacing: var(--tracking-normal);
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  /* WebKit GTK DPI/Scaling fixes */
+  zoom: 1;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-feature-settings: normal;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  /* WebKit scaling normalization */
+  transform: scale(1);
+  transform-origin: 0 0;
+}
+
+/* WebKit GTK specific scaling fixes */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+}
+
+/* Prevent webkit from applying automatic scaling */
+@media screen and (-webkit-device-pixel-ratio: 1) {
+  html { zoom: 1; }
+}
+
+@media screen and (-webkit-device-pixel-ratio: 1.25) {
+  html { zoom: 0.8; }
+}
+
+@media screen and (-webkit-device-pixel-ratio: 1.5) {
+  html { zoom: 0.67; }
+}
+
+@media screen and (-webkit-device-pixel-ratio: 2) {
+  html { zoom: 0.5; }
+}
+
+@keyframes scale-in {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 100ms ease-out forwards;
 }
 
 

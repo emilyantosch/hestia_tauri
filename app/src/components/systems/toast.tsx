@@ -22,11 +22,11 @@ interface ToastProps {
 
 const saveStates = {
   initial: {
-    icon: <Info className="w-[18px] h-[18px] text-white" />,
+    icon: <Info className="w-[18px] h-[18px] text-primary-foreground" />,
     text: "Unsaved changes",
   },
   loading: {
-    icon: <Loader className="w-[15px] h-[15px] animate-spin text-white" />,
+    icon: <Loader className="w-[15px] h-[15px] animate-spin text-primary-foreground" />,
     text: "Saving",
   },
   success: {
@@ -63,7 +63,7 @@ export function Toast({ state: initialState, onReset, onSave }: ToastProps) {
   }
 
   return (
-    <Card className="inline-flex h-10 items-center justify-center gap-4 px-1 py-0 bg-[#131316] rounded-[99px] overflow-hidden shadow-[0px_32px_64px_-16px_#0000004c,0px_16px_32px_-8px_#0000004c,0px_8px_16px_-4px_#0000003d,0px_4px_8px_-2px_#0000003d,0px_-8px_16px_-1px_#00000029,0px_2px_4px_-1px_#0000003d,0px_0px_0px_1px_#000000,inset_0px_0px_0px_1px_#ffffff14,inset_0px_1px_0px_#ffffff33] border-none">
+    <Card className="inline-flex h-10 items-center justify-center gap-4 px-1 py-0 bg-card rounded-[99px] overflow-hidden shadow-lg border">
       <CardContent className="flex items-center p-0">
         <motion.div
           className="inline-flex items-center justify-center gap-2 pl-1.5 pr-3 py-0"
@@ -84,7 +84,7 @@ export function Toast({ state: initialState, onReset, onSave }: ToastProps) {
           <AnimatePresence mode="wait">
             <motion.span
               key={state}
-              className="text-white text-[13px] leading-5 font-normal whitespace-nowrap"
+              className="text-card-foreground text-[13px] leading-5 font-normal whitespace-nowrap"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -106,7 +106,7 @@ export function Toast({ state: initialState, onReset, onSave }: ToastProps) {
             >
               <Button
                 variant="ghost"
-                className="h-7 px-3 text-[13px] text-white hover:bg-white/10 hover:text-white rounded-[99px] transition-colors duration-200"
+                className="h-7 px-3 text-[13px] text-card-foreground hover:bg-accent hover:text-accent-foreground rounded-[99px] transition-colors duration-200"
                 onClick={onReset}
               >
                 Reset

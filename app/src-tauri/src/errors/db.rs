@@ -1,49 +1,30 @@
-#[derive(Debug, thiserror::Error)]
-pub struct DbError {
-    pub kind: DbErrorKind,
-    pub message: String,
-    #[source]
-    pub source: Option<Box<dyn std::error::Error + Send + Sync>>,
-}
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-#[derive(Debug)]
-pub enum DbErrorKind {
+#[derive(Debug, Error, Deserialize, Serialize)]
+pub enum DbError {
+    #[error("Database connection could not be established!")]
     ConnectionError,
+    #[error("Database configuration is invalid!")]
     ConfigurationError,
+    #[error("Database transaction issue occured!")]
     TransactionError,
+    #[error("Database query failed!")]
     QueryError,
+    #[error("Database insert could not be completed!")]
     InsertError,
+    #[error("Database update could not be completed!")]
     UpdateError,
+    #[error("Database delete could not be completed!")]
     DeleteError,
+    #[error("Database rollback failed!")]
     RollbackError,
+    #[error("Database data integrity has been violated!")]
     IntegrityConstraintError,
+    #[error("Database foreign key constraint has been violated!")]
     ReferentialConstraintError,
+    #[error("Database migration could not be completed!")]
     MigrationError,
-}
-
-impl DbError {
-    pub fn new(kind: DbErrorKind, message: String) -> Self {
-        Self {
-            kind,
-            message,
-            source: None,
-        }
-    }
-
-    pub fn with_source<E>(kind: DbErrorKind, message: String, source: E) -> Self
-    where
-        E: std::error::Error + Send + Sync + 'static,
-    {
-        Self {
-            kind,
-            message,
-            source: Some(Box::new(source)),
-        }
-    }
-}
-
-impl std::fmt::Display for DbError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}: {}", self.kind, self.message)
-    }
+    #[error("SeaORM process has failed!")]
+    SeaOrmError,
 }

@@ -4,6 +4,10 @@ pub mod db;
 pub mod file;
 pub mod hash;
 pub mod library;
+pub mod scanner;
+pub mod state;
+pub mod thumbnail;
+pub mod watcher;
 
 pub use app::*;
 pub use config::*;
@@ -11,3 +15,7 @@ pub use db::*;
 pub use file::*;
 pub use hash::*;
 pub use library::*;
+pub use scanner::*;
+pub use state::*;
+pub use thumbnail::*;
+pub use watcher::*;

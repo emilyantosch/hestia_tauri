@@ -1,25 +1,19 @@
 use std::path::PathBuf;
 
 use crate::config::library::{LibraryConfig, LibraryPathConfig};
-use crate::errors::{
-    AppError, AppErrorKind, FileError, FileErrorKind, LibraryError, LibraryErrorKind,
-};
+use crate::errors::{AppError, FileError, LibraryError};
+use anyhow::{Context, Result};
 use tempfile::TempDir;
 use tokio::sync::Notify;
 use tracing::info;
 
 #[test]
-fn check_delete_library() -> Result<(), LibraryError> {
+fn check_delete_library() -> Result<()> {
     use crate::config::library::Library;
     use tempfile::TempDir;
     use tracing::{error, info};
 
-    let path = dirs::data_dir().ok_or_else(|| {
-        LibraryError::new(
-            LibraryErrorKind::InvalidSharePath,
-            "Could not find data directory".to_string(),
-        )
-    })?;
+    let path = dirs::data_dir().ok_or_else(|| LibraryError::InvalidSharePath)?;
     let test_path = TempDir::new_in(path)?;
     let lib = Library::new().switch_or_create_lib(&test_path.path().to_path_buf())?;
     info!("Found or created library to be deleted!");
@@ -41,15 +35,10 @@ fn check_delete_library() -> Result<(), LibraryError> {
 }
 
 #[test]
-fn check_library_creation_successful() -> Result<(), LibraryError> {
+fn check_library_creation_successful() -> Result<()> {
     use crate::config::library::Library;
 
-    let path = dirs::data_dir().ok_or_else(|| {
-        LibraryError::new(
-            LibraryErrorKind::InvalidSharePath,
-            "Could not find data directory".to_string(),
-        )
-    })?;
+    let path = dirs::data_dir().ok_or_else(|| LibraryError::InvalidSharePath)?;
     let test_path = TempDir::new_in(path)?;
     let lib = Library::new().switch_or_create_lib(&test_path.path().to_path_buf())?;
     match lib.library_config.as_ref() {
@@ -57,10 +46,7 @@ fn check_library_creation_successful() -> Result<(), LibraryError> {
             assert_eq!(conf.library_paths, vec![LibraryPathConfig::default()]);
         }
         None => {
-            return Err(LibraryError::new(
-                LibraryErrorKind::ConfigCreationError,
-                "Initialization of config failed!".to_string(),
-            ))
+            return Err(LibraryError::ConfigCreationFailed)?;
         }
     }
     lib.delete()?;
@@ -68,16 +54,11 @@ fn check_library_creation_successful() -> Result<(), LibraryError> {
 }
 
 #[test]
-fn check_library_default_values() -> Result<(), LibraryError> {
+fn check_library_default_values() -> Result<()> {
     use crate::config::library::Library;
     use tempfile::TempDir;
 
-    let path = dirs::data_dir().ok_or_else(|| {
-        LibraryError::new(
-            LibraryErrorKind::InvalidSharePath,
-            "Could not find data directory".to_string(),
-        )
-    })?;
+    let path = dirs::data_dir().ok_or_else(|| LibraryError::InvalidSharePath)?;
     let test_path = TempDir::new_in(path)?;
     let lib = Library::new().switch_or_create_lib(&test_path.path().to_path_buf())?;
     if let Some(lib_config) = lib.library_config.as_ref() {
@@ -88,16 +69,11 @@ fn check_library_default_values() -> Result<(), LibraryError> {
 }
 
 #[test]
-fn check_library_write_save_and_retrieve() -> Result<(), LibraryError> {
+fn check_library_write_save_and_retrieve() -> Result<()> {
     use crate::config::library::Library;
     println!("Start of test");
     info!("Start of test");
-    let path = dirs::data_dir().ok_or_else(|| {
-        LibraryError::new(
-            LibraryErrorKind::InvalidSharePath,
-            "Could not find data directory".to_string(),
-        )
-    })?;
+    let path = dirs::data_dir().ok_or_else(|| LibraryError::InvalidSharePath)?;
     let test_path = TempDir::new_in(path)?;
     info!("Data home configured");
     let mut lib = Library::new().switch_or_create_lib(&test_path.path().to_path_buf())?;

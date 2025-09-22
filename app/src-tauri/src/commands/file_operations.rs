@@ -1,13 +1,12 @@
+#![allow(dead_code)]
 use std::path::PathBuf;
-use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 use tauri::{command, State};
 
-use crate::database::FileOperations;
-use crate::file_system::{DirectoryScanner, FileHash, FileId};
-
-use entity::{files, prelude::*};
+use crate::config::app::AppState;
+use entity::files;
 
 /// Response for file scanning operations
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,11 +54,10 @@ impl From<files::Model> for FileInfo {
         }
     }
 }
-
 /// Scan a directory and sync files to database
 #[command]
 pub async fn scan_directory(
-    scanner: State<'_, Arc<DirectoryScanner>>,
+    app_state: State<'_, Mutex<AppState>>,
     directory_path: String,
 ) -> Result<ScanReport, String> {
     let path = PathBuf::from(directory_path);
@@ -74,7 +72,12 @@ pub async fn scan_directory(
 
     let start_time = std::time::Instant::now();
 
-    match scanner.sync_directory(&path).await {
+    let result = {
+        let state = app_state.lock().await;
+        state.directory_scanner.sync_directory(&path).await
+    };
+
+    match result {
         Ok(report) => {
             let duration_ms = start_time.elapsed().as_millis() as u64;
             Ok(ScanReport {
@@ -86,50 +89,65 @@ pub async fn scan_directory(
                 errors: report.errors,
             })
         }
-        Err(e) => Err(format!("Directory scan failed: {}", e)),
+        Err(e) => Err(format!("Directory scan failed: {e:#?}")),
     }
 }
 
 /// Get file information by path
 #[command]
 pub async fn get_file_by_path(
-    file_ops: State<'_, Arc<FileOperations>>,
+    app_state: State<'_, Mutex<AppState>>,
     file_path: String,
 ) -> Result<Option<FileInfo>, String> {
     let path = PathBuf::from(file_path);
 
-    match file_ops.get_file_by_path(&path).await {
+    let result = {
+        let state = app_state.lock().await;
+        state.file_operations.get_file_by_path(&path).await
+    };
+
+    match result {
         Ok(Some(file)) => Ok(Some(file.into())),
         Ok(None) => Ok(None),
-        Err(e) => Err(format!("Failed to get file: {}", e)),
+        Err(e) => Err(format!("Failed to get file: {e:#?}")),
     }
 }
 
 /// Get all files in a directory
 #[command]
 pub async fn get_files_in_directory(
-    file_ops: State<'_, Arc<FileOperations>>,
+    app_state: State<'_, Mutex<AppState>>,
     directory_path: String,
 ) -> Result<Vec<FileInfo>, String> {
     let path = PathBuf::from(directory_path);
 
-    match file_ops.get_files_in_directory(&path).await {
+    let result = {
+        let state = app_state.lock().await;
+        state.file_operations.get_files_in_directory(&path).await
+    };
+
+    match result {
         Ok(files) => Ok(files.into_iter().map(|f| f.into()).collect()),
-        Err(e) => Err(format!("Failed to get files in directory: {}", e)),
+        Err(e) => Err(format!("Failed to get files in directory: {e:#?}")),
     }
 }
 
 /// Delete a file record from the database
 #[command]
 pub async fn delete_file_by_path(
-    file_ops: State<'_, Arc<FileOperations>>,
+    app_state: State<'_, Mutex<AppState>>,
     file_path: String,
 ) -> Result<bool, String> {
     let path = PathBuf::from(file_path);
 
-    match file_ops.delete_file_by_path(&path).await {
+    let result = {
+        let state = app_state.lock().await;
+        state.file_operations.delete_file_by_path(&path).await
+    };
+
+    match result {
         Ok(deleted) => Ok(deleted),
-        Err(e) => Err(format!("Failed to delete file: {}", e)),
+        Err(e) => Err(format!("Failed to delete file: {e:#?}")),
     }
 }
 
@@ -186,21 +204,26 @@ pub async fn get_file_metadata(file_path: String) -> Result<serde_json::Value, S
 
             Ok(serde_json::Value::Object(result))
         }
-        Err(e) => Err(format!("Failed to get file metadata: {}", e)),
+        Err(e) => Err(format!("Failed to get file metadata: {e:#?}")),
     }
 }
 
 /// Check if a file exists in the database
 #[command]
 pub async fn file_exists_in_database(
-    file_ops: State<'_, Arc<FileOperations>>,
+    app_state: State<'_, Mutex<AppState>>,
     file_path: String,
 ) -> Result<bool, String> {
     let path = PathBuf::from(file_path);
 
-    match file_ops.get_file_by_path(&path).await {
+    let result = {
+        let state = app_state.lock().await;
+        state.file_operations.get_file_by_path(&path).await
+    };
+
+    match result {
         Ok(Some(_)) => Ok(true),
         Ok(None) => Ok(false),
-        Err(e) => Err(format!("Failed to check file existence: {}", e)),
+        Err(e) => Err(format!("Failed to check file existence: {e:#?}")),
     }
 }

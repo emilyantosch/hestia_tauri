@@ -64,7 +64,7 @@ export default function SliderControl({
                   <RiRefreshLine size={16} aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent className="dark px-2 py-1 text-xs">
+              <TooltipContent className="px-2 py-1 text-xs">
                 Reset to default
               </TooltipContent>
             </Tooltip>
@@ -87,7 +87,7 @@ export default function SliderControl({
       </div>
       <div className="flex items-center gap-4">
         <Slider
-          className="grow [&>*:first-child]:bg-black/10"
+          className="grow [&>*:first-child]:bg-border"
           value={sliderValue}
           onValueChange={handleSliderChange}
           min={minValue}

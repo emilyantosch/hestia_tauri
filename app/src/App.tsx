@@ -1,81 +1,98 @@
 import "./App.css";
-import { Check } from "lucide-react";
-
-import { AppSidebar } from "@/components/app-sidebar";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
-import UserDropdown from "@/components/user-dropdown";
-import {
-  SettingsPanelProvider,
-  SettingsPanel,
-} from "@/components/settings-panel";
-import Chat from "@/components/chat";
-
-import { ComboBox, ComboBoxEntry } from "./components/molecules/combobox";
-import Layout from "./Layout";
-import FolderSidebar from "./components/comp-574";
 import { invoke } from '@tauri-apps/api/core';
 
-const test_entry: ComboBoxEntry[] = [
-  {
-    value: "test",
-    logo: Check,
-    label: "test",
-  },
-];
+import {
+  InspectorPanelProvider,
+  InspectorPanel,
+} from "@/components/inspector-panel";
+import Chat from "@/components/chat";
+import { LibrarySetup } from "@/components/library-setup";
+import Layout from "./Layout";
+import { PathLike } from "fs";
+
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
 function App() {
-  let folder_tree = invoke('get_folder_tree')
-    .then((msg) => console.log(msg))
-    .catch((e) => console.log(e))
-    .finally(() => console.log("Invoke concluded"));
   return (
     <div>
-      <Layout>
-        <header className="dark flex h-16 shrink-0 items-center gap-2 px-4 md:px-6 lg:px-8 bg-sidebar text-sidebar-foreground relative before:absolute before:inset-y-3 before:-left-px before:w-px before:bg-gradient-to-b before:from-white/5 before:via-white/15 before:to-white/5 before:z-50">
-          <SidebarTrigger className="-ms-2" />
-          <div className="flex items-center gap-8 ml-auto">
-            <nav className="flex items-center text-sm font-medium max-sm:hidden">
-              <a
-                className="text-sidebar-foreground/50 hover:text-sidebar-foreground/70 transition-colors [&[aria-current]]:text-sidebar-foreground before:content-['/'] before:px-4 before:text-sidebar-foreground/30 first:before:hidden"
-                href="#"
-                aria-current
-              >
-                Playground
-              </a>
-              <a
-                className="text-sidebar-foreground/50 hover:text-sidebar-foreground/70 transition-colors [&[aria-current]]:text-sidebar-foreground before:content-['/'] before:px-4 before:text-sidebar-foreground/30 first:before:hidden"
-                href="#"
-              >
-                Dashboard
-              </a>
-              <a
-                className="text-sidebar-foreground/50 hover:text-sidebar-foreground/70 transition-colors [&[aria-current]]:text-sidebar-foreground before:content-['/'] before:px-4 before:text-sidebar-foreground/30 first:before:hidden"
-                href="#"
-              >
-                Docs
-              </a>
-              <a
-                className="text-sidebar-foreground/50 hover:text-sidebar-foreground/70 transition-colors [&[aria-current]]:text-sidebar-foreground before:content-['/'] before:px-4 before:text-sidebar-foreground/30 first:before:hidden"
-                href="#"
-              >
-                API Reference
-              </a>
-            </nav>
-            <UserDropdown />
-          </div>
-        </header>
-        <SettingsPanelProvider>
-          <div className="flex h-[calc(100svh-4rem)] bg-[hsl(240_5%_92.16%)] md:rounded-s-3xl md:group-peer-data-[state=collapsed]/sidebar-inset:rounded-s-none transition-all ease-in-out duration-300">
-            <Chat />
-            <SettingsPanel />
-          </div>
-        </SettingsPanelProvider>
-      </Layout>
+      <QueryClientProvider client={queryClient}>
+        <Startup></Startup>
+      </QueryClientProvider>
     </div>
   );
+}
+
+
+type Library = {
+  share_path: PathLike,
+  config: LibraryConfig,
+}
+
+type LibraryConfig = {
+  paths: LibraryPathConfig[],
+}
+
+type LibraryPathConfig = {
+  name: String,
+  path: PathLike
+}
+
+
+
+function Startup(): React.ReactNode {
+  const { isPending, error, data, refetch } = useQuery({
+    queryKey: ['library-paths'],
+    queryFn: () => invoke('get_library_paths'),
+    retry: false
+  });
+
+  if (isPending) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading library...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    // Show LibrarySetup if no library paths are configured
+    return (
+      <LibrarySetup
+        onLibraryCreated={() => {
+          refetch();
+        }}
+      />
+    )
+  }
+
+  // Check if data is empty or undefined - also show LibrarySetup
+  const libraryPaths = data as LibraryPathConfig[] | undefined;
+  if (!libraryPaths || libraryPaths.length === 0) {
+    return (
+      <LibrarySetup
+        onLibraryCreated={() => {
+          refetch();
+        }}
+      />
+    )
+  }
+
+  return (
+    <Layout>
+      <header className="flex h-4 shrink-0 items-center gap-2 px-4 md:px-6 lg:px-8 bg-sidebar text-sidebar-foreground relative before:absolute before:inset-y-3 before:-left-px before:w-px before:bg-gradient-to-b before:from-white/5 before:via-white/15 before:to-white/5 before:z-50">
+      </header>
+      <InspectorPanelProvider>
+        <div className="flex h-[calc(100svh-2rem)] md:rounded-s-3xl md:group-peer-data-[state=collapsed]/sidebar-inset:rounded-s-none transition-all ease-in-out duration-300">
+          <Chat />
+          <InspectorPanel />
+        </div>
+      </InspectorPanelProvider>
+    </Layout>
+  )
 }
 
 export default App;

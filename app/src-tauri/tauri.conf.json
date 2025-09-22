@@ -4,17 +4,27 @@
   "version": "0.1.0",
   "identifier": "com.hestia.app",
   "build": {
-    "beforeDevCommand": "bun run dev",
+    "beforeDevCommand": "deno task dev",
+    "beforeBuildCommand": "deno task build",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
         "title": "hestia_tauri",
-        "width": 800,
-        "height": 600
+        "width": 1200,
+        "height": 800,
+        "minWidth": 400,
+        "minHeight": 300,
+        "maxWidth": 2560,
+        "maxHeight": 1440,
+        "center": true,
+        "resizable": true,
+        "decorations": true,
+        "transparent": false,
+        "alwaysOnTop": false,
+        "visible": true
       }
     ],
     "security": {
