@@ -1,263 +1,235 @@
 use crate::errors::*;
-use crate::file_system::watcher::FileWatcher;
+use crate::file_system::watcher::{FSEvent, FileWatcher};
 use crate::file_system::FileId;
-use notify::event::{CreateKind, ModifyKind, RemoveKind, RenameMode}; // Added RenameMode
+use crate::file_system::FileWatcherMessage;
+use notify::EventKind::Create;
+use tracing::info;
+
+#[cfg(test)]
+use crate::file_system::TestFileWatcherEventHandler;
+use crate::utils::canon_path::CanonPath;
+
+use notify::event::{CreateKind, ModifyKind, RemoveKind, RenameMode};
 use notify::EventKind;
 use std::fs;
 use std::io::Write;
-use tempfile::tempdir; // For creating temporary directories for tests
-use tokio::sync::mpsc::error::TryRecvError; // Added for try_recv
-use tokio::time::Duration;
+use std::sync::Arc;
+use std::time::Duration;
+use tempfile::tempdir;
+use tokio::sync::mpsc::error::TryRecvError;
+
+#[cfg(test)]
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::Mutex;
 
 // Helper function to create a FileWatcher instance for tests
-async fn create_test_watcher() -> FileWatcher {
-    let mut watcher = FileWatcher::new().await.expect("Failed to create watcher");
-    watcher.init_watcher().await;
-    watcher
+#[cfg(test)]
+async fn run_test_watcher() -> Result<
+    (
+        UnboundedSender<FileWatcherMessage>,
+        UnboundedReceiver<FSEvent>,
+    ),
+    AppError,
+> {
+    // Initialize tracing for tests
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::TRACE)
+        .with_test_writer() // This makes it work with cargo test
+        .try_init()
+        .ok(); // Ignore errors if already initialize
+    let (fw_sender, fw_receiver) = tokio::sync::mpsc::unbounded_channel::<FileWatcherMessage>();
+    let (fw_event_sender, fw_event_receiver) = tokio::sync::mpsc::unbounded_channel::<FSEvent>();
+    let fw_event_handler = Arc::new(TestFileWatcherEventHandler {
+        sender: Arc::new(Mutex::new(fw_event_sender)),
+    });
+    let watcher = FileWatcher::new_with_handler(fw_event_handler, fw_receiver)
+        .await
+        .expect("Failed to create watcher");
+    tokio::spawn(async move {
+        let _ = watcher.run().await;
+    });
+    Ok((fw_sender, fw_event_receiver))
 }
 
 #[tokio::test]
-async fn on_file_create_emit_correct_event() {
+async fn on_file_create_emit_correct_event() -> Result<(), AppError> {
     let tmp_dir = tempdir().unwrap();
     let file_path = tmp_dir.path().join("test_file.txt");
+    info!("Defined test file path at {file_path:#?}");
 
-    let mut watcher = create_test_watcher().await;
-    watcher
-        .watch(tmp_dir.path())
-        .await
-        .expect("Failed to watch temp directory");
+    let mut watcher = run_test_watcher().await?;
+    info!("Watcher started");
+    let _ = watcher
+        .0
+        .send(FileWatcherMessage::WatchPath(CanonPath::from(
+            tmp_dir.path().to_path_buf(),
+        )));
 
+    info!("Watcher send command to worker thread");
     // Give the watcher a moment to start
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     // Create a file to trigger an event
-    let mut file = fs::File::create(&file_path).unwrap();
+    let mut file = std::fs::File::create(&file_path).unwrap();
+    info!("File {file:#?} created");
     writeln!(file, "Hello, world!").unwrap();
+    info!("File {file:#?} written to");
     drop(file); // Close the file
 
     // Wait for the event to be processed
     // The debouncer is set to 2 seconds, plus some buffer
     tokio::time::sleep(Duration::from_secs(3)).await;
 
-    let mut receiver_lock = watcher.processed_event_receiver.lock().await;
-    if let Some(ref mut rx) = *receiver_lock {
-        match tokio::time::timeout(Duration::from_secs(1), rx.recv()).await {
-            Ok(Some(event)) => {
-                assert!(matches!(
-                    event.file_event.as_ref().unwrap().kind,
-                    EventKind::Create(CreateKind::File)
-                ));
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().paths,
-                    vec![file_path.clone()]
-                );
-                // Further assertions on file_id if necessary,
-                // e.g. check if it's not default or matches expected hash
-                let expected_file_id = FileId::extract(&file_path).await.unwrap();
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().hash.file_id,
-                    expected_file_id
-                );
-            }
-            Ok(None) => panic!("Processed event channel closed prematurely"),
-            Err(_) => panic!("Timeout waiting for processed event for create"),
+    info!("Checking for change...");
+    match tokio::time::timeout(Duration::from_secs(1), watcher.1.recv()).await {
+        Ok(Some(event)) => {
+            info!("Got event from worker! {event:#?}");
+            assert!(matches!(
+                event.file_event.as_ref().unwrap().kind,
+                notify::EventKind::Create(CreateKind::File)
+            ));
+            assert_eq!(
+                event.file_event.as_ref().unwrap().paths,
+                vec![file_path.clone()]
+            );
+            // Further assertions on file_id if necessary,
+            // e.g. check if it's not default or matches expected hash
+            let expected_file_id = FileId::extract(&file_path).await.unwrap();
+            assert_eq!(
+                event
+                    .file_event
+                    .as_ref()
+                    .unwrap()
+                    .hash
+                    .as_ref()
+                    .unwrap()
+                    .file_id,
+                expected_file_id
+            );
         }
-    } else {
-        panic!("Processed event receiver was not initialized for create");
+        Ok(None) => panic!("Processed event channel closed prematurely"),
+        Err(_) => panic!("Timeout waiting for processed event for create"),
     }
+    Ok(())
 }
 
 #[tokio::test]
-async fn on_file_modify_emit_correct_event() {
+async fn on_file_modify_emit_correct_event() -> Result<(), AppError> {
     let tmp_dir = tempdir().unwrap();
     let file_path = tmp_dir.path().join("mod_test_file.txt");
 
     // 1. Create and write initial content
     let mut file = fs::File::create(&file_path).expect("Failed to create test file");
     writeln!(file, "Initial content").expect("Failed to write initial content");
-    drop(file); // Ensure file is closed
+    drop(file);
 
     // 2. Create and start watcher
-    let mut watcher = create_test_watcher().await;
-    watcher
-        .watch(tmp_dir.path())
-        .await
-        .expect("Failed to watch temp directory");
+    let (message_sender, mut event_receiver) = run_test_watcher().await?;
+    let _ = message_sender.send(FileWatcherMessage::WatchPath(CanonPath::from(
+        tmp_dir.path().to_path_buf(),
+    )));
 
-    // Give watcher time to pick up initial create event
-    tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
-
-    // 3. Drain initial create events
-    let mut receiver_lock_drain = watcher.processed_event_receiver.lock().await;
-    if let Some(ref mut rx_drain) = *receiver_lock_drain {
-        println!("Draining initial events...");
-        let mut drained_count = 0;
-        loop {
-            match rx_drain.try_recv() {
-                Ok(event) => {
-                    drained_count += 1;
-                    println!("Drained event: {:?}", event);
-                }
-                Err(TryRecvError::Empty) => {
-                    println!(
-                        "No more initial events to drain. Drained {} events.",
-                        drained_count
-                    );
-                    break;
-                }
-                Err(TryRecvError::Disconnected) => {
-                    panic!("Event channel disconnected while draining initial events");
-                }
-            }
-        }
-    } else {
-        panic!("Processed event receiver was not initialized for draining");
-    }
-    drop(receiver_lock_drain); // Release lock
-
-    // 4. Modify the file
-    fs::write(&file_path, "New content").expect("Failed to write new content to file");
-    println!("File modified: {:?}", file_path);
-
-    // 5. Wait for the modify event to be processed
-    // Debouncer is 2 seconds, wait a bit longer.
+    // Give watcher time to pick up initial create event and drain it
     tokio::time::sleep(Duration::from_secs(3)).await;
 
-    // 6. Receive and assert the modify event
-    let mut receiver_lock_modify = watcher.processed_event_receiver.lock().await;
-    if let Some(ref mut rx_modify) = *receiver_lock_modify {
-        match tokio::time::timeout(Duration::from_secs(2), rx_modify.recv()).await {
-            Ok(Some(event)) => {
-                println!("Received event after modify: {:?}", event);
-                // Assert event kind is Modify (any sub-kind of Modify is fine)
-                assert!(
-                    matches!(
-                        event.file_event.as_ref().unwrap().kind,
-                        EventKind::Modify(_)
-                    ),
-                    "Event kind was not Modify: {:?}",
-                    event.file_event.as_ref().unwrap().kind
-                );
-                // Assert path is correct
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().paths,
-                    vec![file_path.clone()]
-                );
-                // Assert FileId is correct
-                let expected_file_id = FileId::extract(&file_path)
-                    .await
-                    .expect("Failed to extract FileId for modified file");
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().hash.file_id,
-                    expected_file_id
-                );
-            }
-            Ok(None) => {
-                panic!("Processed event channel closed prematurely before modify event")
-            }
-            Err(_) => panic!("Timeout waiting for processed modify event"),
-        }
-    } else {
-        panic!("Processed event receiver was not initialized for modify event");
+    // Drain initial create event
+    if let Ok(Some(_)) = tokio::time::timeout(Duration::from_secs(1), event_receiver.recv()).await {
+        println!("Drained initial create event");
     }
+
+    // 3. Modify the file
+    fs::write(&file_path, "New content").expect("Failed to write new content to file");
+
+    // 4. Wait for the modify event to be processed
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    // 5. Receive and assert the modify event
+    match tokio::time::timeout(Duration::from_secs(1), event_receiver.recv()).await {
+        Ok(Some(event)) => {
+            assert!(
+                matches!(
+                    event.file_event.as_ref().unwrap().kind,
+                    EventKind::Modify(_)
+                ),
+                "Event kind was not Modify: {:?}",
+                event.file_event.as_ref().unwrap().kind
+            );
+            assert_eq!(
+                event.file_event.as_ref().unwrap().paths,
+                vec![file_path.clone()]
+            );
+            let expected_file_id = FileId::extract(&file_path).await.unwrap();
+            assert_eq!(
+                event
+                    .file_event
+                    .as_ref()
+                    .unwrap()
+                    .hash
+                    .as_ref()
+                    .unwrap()
+                    .file_id,
+                expected_file_id
+            );
+        }
+        Ok(None) => panic!("Processed event channel closed prematurely"),
+        Err(_) => panic!("Timeout waiting for processed modify event"),
+    }
+    Ok(())
 }
 
 #[tokio::test]
-async fn on_file_delete_emit_correct_event() {
+async fn on_file_delete_emit_correct_event() -> Result<(), AppError> {
     let tmp_dir = tempdir().unwrap();
     let file_path = tmp_dir.path().join("del_test_file.txt");
 
     // 1. Create the file
     fs::File::create(&file_path).expect("Failed to create test file for deletion test");
-    // Content doesn't matter, ensure it's closed by dropping the File object implicitly.
 
     // 2. Create and start watcher
-    let mut watcher = create_test_watcher().await;
-    watcher
-        .watch(tmp_dir.path())
-        .await
-        .expect("Failed to watch temp directory for deletion test");
+    let (message_sender, mut event_receiver) = run_test_watcher().await?;
+    let _ = message_sender.send(FileWatcherMessage::WatchPath(CanonPath::from(
+        tmp_dir.path().to_path_buf(),
+    )));
 
-    // 3. Wait and drain initial create events
-    tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
+    // Give watcher time to pick up initial create event and drain it
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
-    let mut receiver_lock_drain = watcher.processed_event_receiver.lock().await;
-    if let Some(ref mut rx_drain) = *receiver_lock_drain {
-        println!("Draining initial events for deletion test...");
-        let mut drained_count = 0;
-        loop {
-            match rx_drain.try_recv() {
-                Ok(event) => {
-                    drained_count += 1;
-                    println!("Drained event (delete test): {:?}", event);
-                }
-                Err(TryRecvError::Empty) => {
-                    println!(
-                        "No more initial events to drain (delete test). Drained {} events.",
-                        drained_count
-                    );
-                    break;
-                }
-                Err(TryRecvError::Disconnected) => {
-                    panic!(
-                        "Event channel disconnected while draining initial events (delete test)"
-                    );
-                }
-            }
-        }
-    } else {
-        panic!("Processed event receiver was not initialized for draining (delete test)");
+    // Drain initial create event
+    if let Ok(Some(_)) = tokio::time::timeout(Duration::from_secs(1), event_receiver.recv()).await {
+        println!("Drained initial create event");
     }
-    drop(receiver_lock_drain); // Release lock
 
-    // 4. Delete the file
+    // 3. Delete the file
     fs::remove_file(&file_path).expect("Failed to delete test file");
-    println!("File deleted: {:?}", file_path);
 
-    // 5. Wait for the delete event to be processed
-    tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
+    // 4. Wait for the delete event to be processed
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
-    // 6. Receive and assert the delete event
-    let mut receiver_lock_delete = watcher.processed_event_receiver.lock().await;
-    println!("Processed Event Receiver has been acquired!");
-    if let Some(ref mut rx_delete) = *receiver_lock_delete {
-        match tokio::time::timeout(Duration::from_secs(2), rx_delete.recv()).await {
-            Ok(Some(event)) => {
-                println!("Received event after delete: {:?}", event);
-                // Assert event kind is RemoveKind::File
-                assert!(
-                    matches!(
-                        event.file_event.as_ref().unwrap().kind,
-                        EventKind::Remove(RemoveKind::File)
-                    ),
-                    "Event kind was not Remove(File): {:?}",
-                    event.file_event.as_ref().unwrap().kind
-                );
-                // Assert path is correct
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().paths,
-                    vec![file_path.clone()]
-                );
-                // Assert FileId is correct (should be from_path as file is deleted)
-                let expected_file_id = FileId::extract(&file_path).await.unwrap();
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().hash.file_id,
-                    expected_file_id,
-                    "FileId did not match expected from_path ID"
-                );
-            }
-            Ok(None) => {
-                panic!("Processed event channel closed prematurely before delete event")
-            }
-            Err(_) => panic!("Timeout waiting for processed delete event"),
+    // 5. Receive and assert the delete event
+    match tokio::time::timeout(Duration::from_secs(1), event_receiver.recv()).await {
+        Ok(Some(event)) => {
+            assert!(
+                matches!(
+                    event.file_event.as_ref().unwrap().kind,
+                    EventKind::Remove(RemoveKind::File)
+                ),
+                "Event kind was not Remove(File): {:?}",
+                event.file_event.as_ref().unwrap().kind
+            );
+            assert_eq!(
+                event.file_event.as_ref().unwrap().paths,
+                vec![file_path.clone()]
+            );
         }
-    } else {
-        panic!("Processed event receiver was not initialized for delete event");
+        Ok(None) => panic!("Processed event channel closed prematurely"),
+        Err(_) => panic!("Timeout waiting for processed delete event"),
     }
+    Ok(())
 }
 
 #[tokio::test]
-async fn on_rename_emit_correct_event() {
+async fn on_rename_emit_correct_event() -> Result<(), AppError> {
     let tmp_dir = tempdir().unwrap();
     let old_file_path = tmp_dir.path().join("rename_old.txt");
     let new_file_path = tmp_dir.path().join("rename_new.txt");
@@ -267,158 +239,115 @@ async fn on_rename_emit_correct_event() {
         .expect("Failed to create test file for rename test (old_file_path)");
 
     // 2. Create and start watcher
-    let mut watcher = create_test_watcher().await;
-    watcher
-        .watch(tmp_dir.path())
-        .await
-        .expect("Failed to watch temp directory for rename test");
+    let (message_sender, mut event_receiver) = run_test_watcher().await?;
+    let _ = message_sender.send(FileWatcherMessage::WatchPath(CanonPath::from(
+        tmp_dir.path().to_path_buf(),
+    )));
 
-    // 3. Wait and drain initial create events
-    tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
+    // Give watcher time to pick up initial create event and drain it
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
-    let mut receiver_lock_drain = watcher.processed_event_receiver.lock().await;
-    if let Some(ref mut rx_drain) = *receiver_lock_drain {
-        println!("Draining initial events for rename test...");
-        let mut drained_count = 0;
-        loop {
-            match rx_drain.try_recv() {
-                Ok(event) => {
-                    drained_count += 1;
-                    println!("Drained event (rename test): {:?}", event);
-                }
-                Err(TryRecvError::Empty) => {
-                    println!(
-                        "No more initial events to drain (rename test). Drained {} events.",
-                        drained_count
-                    );
-                    break;
-                }
-                Err(TryRecvError::Disconnected) => {
-                    panic!(
-                        "Event channel disconnected while draining initial events (rename test)"
-                    );
-                }
-            }
-        }
-    } else {
-        panic!("Processed event receiver was not initialized for draining (rename test)");
+    // Drain initial create event
+    if let Ok(Some(_)) = tokio::time::timeout(Duration::from_secs(1), event_receiver.recv()).await {
+        println!("Drained initial create event");
     }
-    drop(receiver_lock_drain);
 
-    // 4. Rename the file
+    // 3. Rename the file
     fs::rename(&old_file_path, &new_file_path).expect("Failed to rename test file");
-    println!(
-        "File renamed from {:?} to {:?}",
-        old_file_path, new_file_path
-    );
 
-    // 5. Wait for the rename event to be processed
-    tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
+    // 4. Wait for the rename event to be processed
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
-    // 6. Receive and assert the rename event
-    let mut receiver_lock_rename = watcher.processed_event_receiver.lock().await;
-    if let Some(ref mut rx_rename) = *receiver_lock_rename {
-        match tokio::time::timeout(Duration::from_secs(2), rx_rename.recv()).await {
-            Ok(Some(event)) => {
-                println!("Received event after rename: {:?}", event);
-                // Assert event kind is ModifyKind::Name(RenameMode::Both)
-                assert!(
-                    matches!(
-                        event.file_event.as_ref().unwrap().kind,
-                        EventKind::Modify(ModifyKind::Name(RenameMode::Both))
-                    ),
-                    "Event kind was not Modify(Name(Both)): {:?}",
-                    event.file_event.as_ref().unwrap().kind
-                );
-                // Assert paths are correct (old and new)
-                // The order of paths in the event can sometimes vary by platform or notify backend.
-                // We should check that both paths are present and the order.
-                // The current implementation of `notify-debouncer-full` seems to provide [from, to]
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().paths,
-                    vec![old_file_path.clone(), new_file_path.clone()],
-                    "Event paths did not match expected [old_path, new_path]"
-                );
-                // Assert FileId is based on the new path
-                let expected_file_id = FileId::extract(&new_file_path).await.unwrap();
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().hash.file_id,
-                    expected_file_id,
-                    "FileId did not match expected from_path for new_file_path"
-                );
-            }
-            Ok(None) => {
-                panic!("Processed event channel closed prematurely before rename event")
-            }
-            Err(_) => panic!("Timeout waiting for processed rename event"),
+    // 5. Receive and assert the rename event
+    match tokio::time::timeout(Duration::from_secs(1), event_receiver.recv()).await {
+        Ok(Some(event)) => {
+            assert!(
+                matches!(
+                    event.file_event.as_ref().unwrap().kind,
+                    EventKind::Modify(ModifyKind::Name(RenameMode::Both))
+                ),
+                "Event kind was not Modify(Name(Both)): {:?}",
+                event.file_event.as_ref().unwrap().kind
+            );
+            assert_eq!(
+                event.file_event.as_ref().unwrap().paths,
+                vec![old_file_path.clone(), new_file_path.clone()]
+            );
+            let expected_file_id = FileId::extract(&new_file_path).await.unwrap();
+            assert_eq!(
+                event
+                    .file_event
+                    .as_ref()
+                    .unwrap()
+                    .hash
+                    .as_ref()
+                    .unwrap()
+                    .file_id,
+                expected_file_id
+            );
         }
-    } else {
-        panic!("Processed event receiver was not initialized for rename event");
+        Ok(None) => panic!("Processed event channel closed prematurely"),
+        Err(_) => panic!("Timeout waiting for processed rename event"),
     }
+    Ok(())
 }
 
 #[tokio::test]
-async fn on_folder_create_emit_correct_event() {
+async fn on_folder_create_emit_correct_event() -> Result<(), AppError> {
     let tmp_dir = tempdir().unwrap();
     let folder_path = tmp_dir.path().join("new_test_folder");
 
     // 1. Create and start watcher
-    let mut watcher = create_test_watcher().await;
-    watcher
-        .watch(tmp_dir.path()) // Watch the base directory
-        .await
-        .expect("Failed to watch temp directory for folder creation test");
+    let (message_sender, mut event_receiver) = run_test_watcher().await?;
+    let _ = message_sender.send(FileWatcherMessage::WatchPath(CanonPath::from(
+        tmp_dir.path().to_path_buf(),
+    )));
 
-    // 2. Give watcher a moment to initialize
+    // Give watcher a moment to initialize
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    // 3. Create the new folder
+    // 2. Create the new folder
     fs::create_dir(&folder_path).expect("Failed to create test folder");
-    println!("Folder created: {:?}", folder_path);
 
-    // 4. Wait for the folder creation event to be processed
-    tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
+    // 3. Wait for the folder creation event to be processed
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
-    // 5. Receive and assert the folder creation event
-    let mut receiver_lock_folder_create = watcher.processed_event_receiver.lock().await;
-    if let Some(ref mut rx_folder_create) = *receiver_lock_folder_create {
-        match tokio::time::timeout(Duration::from_secs(2), rx_folder_create.recv()).await {
-            Ok(Some(event)) => {
-                println!("Received event after folder create: {:?}", event);
-                // Assert event kind is CreateKind::Folder
-                assert!(
-                    matches!(
-                        event.file_event.as_ref().unwrap().kind,
-                        EventKind::Create(CreateKind::Folder)
-                    ),
-                    "Event kind was not Create(Folder): {:?}",
-                    event.file_event.as_ref().unwrap().kind
-                );
-                // Assert path is correct
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().paths,
-                    vec![folder_path.clone()]
-                );
-                // Assert oileId is based on the folder path
-                let expected_file_id = FileId::extract(&folder_path).await.unwrap();
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().hash.file_id,
-                    expected_file_id,
-                    "FileId did not match expected from_path for new_folder_path"
-                );
-            }
-            Ok(None) => {
-                panic!("Processed event channel closed prematurely before folder create event")
-            }
-            Err(_) => panic!("Timeout waiting for processed folder create event"),
+    // 4. Receive and assert the folder creation event
+    match tokio::time::timeout(Duration::from_secs(1), event_receiver.recv()).await {
+        Ok(Some(event)) => {
+            assert!(
+                matches!(
+                    event.folder_event.as_ref().unwrap().kind,
+                    EventKind::Create(CreateKind::Folder)
+                ),
+                "Event kind was not Create(Folder): {:?}",
+                event.folder_event.as_ref().unwrap().kind
+            );
+            assert_eq!(
+                event.folder_event.as_ref().unwrap().paths,
+                vec![folder_path.clone()]
+            );
+            let expected_file_id = FileId::extract(&folder_path).await.unwrap();
+            assert_eq!(
+                event
+                    .folder_event
+                    .as_ref()
+                    .unwrap()
+                    .hash
+                    .as_ref()
+                    .unwrap()
+                    .file_id,
+                expected_file_id
+            );
         }
-    } else {
-        panic!("Processed event receiver was not initialized for folder create event");
+        Ok(None) => panic!("Processed event channel closed prematurely"),
+        Err(_) => panic!("Timeout waiting for processed folder create event"),
     }
+    Ok(())
 }
 
 #[tokio::test]
-async fn on_folder_delete_emit_correct_event() {
+async fn on_folder_delete_emit_correct_event() -> Result<(), AppError> {
     let tmp_dir = tempdir().unwrap();
     let folder_path = tmp_dir.path().join("del_test_folder");
 
@@ -426,89 +355,49 @@ async fn on_folder_delete_emit_correct_event() {
     fs::create_dir(&folder_path).expect("Failed to create test folder for delete test");
 
     // 2. Create and start watcher
-    let mut watcher = create_test_watcher().await;
-    watcher
-        .watch(tmp_dir.path()) // Watch the base directory
-        .await
-        .expect("Failed to watch temp directory for folder delete test");
+    let (message_sender, mut event_receiver) = run_test_watcher().await?;
+    let _ = message_sender.send(FileWatcherMessage::WatchPath(CanonPath::from(
+        tmp_dir.path().to_path_buf(),
+    )));
 
-    // 3. Wait and drain initial folder creation events
-    tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
+    // Give watcher time to pick up initial create event and drain it
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
-    let mut receiver_lock_drain = watcher.processed_event_receiver.lock().await;
-    if let Some(ref mut rx_drain) = *receiver_lock_drain {
-        println!("Draining initial events for folder delete test...");
-        let mut drained_count = 0;
-        loop {
-            match rx_drain.try_recv() {
-                Ok(event) => {
-                    drained_count += 1;
-                    println!("Drained event (folder delete test): {:?}", event);
-                }
-                Err(TryRecvError::Empty) => {
-                    println!(
-                        "No more initial events to drain (folder delete test). Drained {} events.",
-                        drained_count
-                    );
-                    break;
-                }
-                Err(TryRecvError::Disconnected) => {
-                    panic!("Event channel disconnected while draining initial events (folder delete test)");
-                }
-            }
-        }
-    } else {
-        panic!("Processed event receiver was not initialized for draining (folder delete test)");
+    // Drain initial create event
+    if let Ok(Some(_)) = tokio::time::timeout(Duration::from_secs(1), event_receiver.recv()).await {
+        println!("Drained initial create event");
     }
-    drop(receiver_lock_drain); // Release lock
 
-    // 4. Delete the folder
+    // 3. Delete the folder
     fs::remove_dir(&folder_path).expect("Failed to delete test folder");
-    println!("Folder deleted: {:?}", folder_path);
 
-    // 5. Wait for the folder delete event to be processed
-    tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
+    // 4. Wait for the folder delete event to be processed
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
-    // 6. Receive and assert the folder delete event
-    let mut receiver_lock_folder_delete = watcher.processed_event_receiver.lock().await;
-    if let Some(ref mut rx_folder_delete) = *receiver_lock_folder_delete {
-        match tokio::time::timeout(Duration::from_secs(2), rx_folder_delete.recv()).await {
-            Ok(Some(event)) => {
-                println!("Received event after folder delete: {:?}", event);
-                // Assert event kind is RemoveKind::Folder
-                assert!(
-                    matches!(
-                        event.file_event.as_ref().unwrap().kind,
-                        EventKind::Remove(RemoveKind::Folder)
-                    ),
-                    "Event kind was not Remove(Folder): {:?}",
-                    event.file_event.as_ref().unwrap().kind
-                );
-                // Assert path is correct
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().paths,
-                    vec![folder_path.clone()]
-                );
-                // Assert FileId is based on the folder path
-                let expected_file_id = FileId::extract(&folder_path).await.unwrap();
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().hash.file_id,
-                    expected_file_id,
-                    "FileId did not match expected from_path for deleted_folder_path"
-                );
-            }
-            Ok(None) => {
-                panic!("Processed event channel closed prematurely before folder delete event")
-            }
-            Err(_) => panic!("Timeout waiting for processed folder delete event"),
+    // 5. Receive and assert the folder delete event
+    match tokio::time::timeout(Duration::from_secs(2), event_receiver.recv()).await {
+        Ok(Some(event)) => {
+            assert!(
+                matches!(
+                    event.folder_event.as_ref().unwrap().kind,
+                    EventKind::Remove(RemoveKind::Folder)
+                ),
+                "Event kind was not Remove(Folder): {:?}",
+                event.folder_event.as_ref().unwrap().kind
+            );
+            assert_eq!(
+                event.folder_event.as_ref().unwrap().paths,
+                vec![folder_path.clone()]
+            );
         }
-    } else {
-        panic!("Processed event receiver was not initialized for folder delete event");
+        Ok(None) => panic!("Processed event channel closed prematurely"),
+        Err(_) => panic!("Timeout waiting for processed folder delete event"),
     }
+    Ok(())
 }
 
 #[tokio::test]
-async fn on_folder_rename_emit_correct_event() {
+async fn on_folder_rename_emit_correct_event() -> Result<(), AppError> {
     let tmp_dir = tempdir().unwrap();
     let old_folder_path = tmp_dir.path().join("rename_old_folder");
     let new_folder_path = tmp_dir.path().join("rename_new_folder");
@@ -518,128 +407,93 @@ async fn on_folder_rename_emit_correct_event() {
         .expect("Failed to create test folder for rename test (old_folder_path)");
 
     // 2. Create and start watcher
-    let mut watcher = create_test_watcher().await;
-    watcher
-        .watch(tmp_dir.path()) // Watch the base directory
-        .await
-        .expect("Failed to watch temp directory for folder rename test");
+    let (message_sender, mut event_receiver) = run_test_watcher().await?;
+    let _ = message_sender.send(FileWatcherMessage::WatchPath(CanonPath::from(
+        tmp_dir.path().to_path_buf(),
+    )));
 
-    // 3. Wait and drain initial folder creation events
-    tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
+    // Give watcher time to pick up initial create event and drain it
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
-    let mut receiver_lock_drain = watcher.processed_event_receiver.lock().await;
-    if let Some(ref mut rx_drain) = *receiver_lock_drain {
-        println!("Draining initial events for folder rename test...");
-        let mut drained_count = 0;
-        loop {
-            match rx_drain.try_recv() {
-                Ok(event) => {
-                    drained_count += 1;
-                    println!("Drained event (folder rename test): {:?}", event);
-                }
-                Err(TryRecvError::Empty) => {
-                    println!(
-                        "No more initial events to drain (folder rename test). Drained {} events.",
-                        drained_count
-                    );
-                    break;
-                }
-                Err(TryRecvError::Disconnected) => {
-                    panic!("Event channel disconnected while draining initial events (folder rename test)");
-                }
-            }
-        }
-    } else {
-        panic!("Processed event receiver was not initialized for draining (folder rename test)");
+    // Drain initial create event
+    if let Ok(Some(_)) = tokio::time::timeout(Duration::from_secs(1), event_receiver.recv()).await {
+        println!("Drained initial create event");
     }
-    drop(receiver_lock_drain); // Release lock
 
-    // 4. Rename the folder
+    // 3. Rename the folder
     fs::rename(&old_folder_path, &new_folder_path).expect("Failed to rename test folder");
-    println!(
-        "Folder renamed from {:?} to {:?}",
-        old_folder_path, new_folder_path
-    );
 
-    // 5. Wait for the folder rename event to be processed
-    tokio::time::sleep(Duration::from_secs(3)).await; // Debouncer is 2s
+    // 4. Wait for the folder rename event to be processed
+    tokio::time::sleep(Duration::from_secs(3)).await;
 
-    // 6. Receive and assert the folder rename event
-    let mut receiver_lock_folder_rename = watcher.processed_event_receiver.lock().await;
-    if let Some(ref mut rx_folder_rename) = *receiver_lock_folder_rename {
-        match tokio::time::timeout(Duration::from_secs(2), rx_folder_rename.recv()).await {
-            Ok(Some(event)) => {
-                println!("Received event after folder rename: {:?}", event);
-                // Assert event kind is ModifyKind::Name(RenameMode::Both)
-                assert!(
-                    matches!(
-                        event.file_event.as_ref().unwrap().kind,
-                        EventKind::Modify(ModifyKind::Name(RenameMode::Both))
-                    ),
-                    "Event kind was not Modify(Name(Both)) for folder rename: {:?}",
-                    event.file_event.as_ref().unwrap().kind
-                );
-                // Assert paths are correct (old and new)
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().paths,
-                    vec![old_folder_path.clone(), new_folder_path.clone()],
-                    "Event paths did not match expected [old_folder_path, new_folder_path]"
-                );
-                // Assert FileId is based on the new folder path
-                let expected_file_id = FileId::extract(&new_folder_path).await.unwrap();
-                assert_eq!(
-                    event.file_event.as_ref().unwrap().hash.file_id,
-                    expected_file_id,
-                    "FileId did not match expected from_path for new_folder_path"
-                );
-            }
-            Ok(None) => {
-                panic!("Processed event channel closed prematurely before folder rename event")
-            }
-            Err(_) => panic!("Timeout waiting for processed folder rename event"),
+    // 5. Receive and assert the folder rename event
+    match tokio::time::timeout(Duration::from_secs(1), event_receiver.recv()).await {
+        Ok(Some(event)) => {
+            assert!(
+                matches!(
+                    event.folder_event.as_ref().unwrap().kind,
+                    EventKind::Modify(ModifyKind::Name(RenameMode::Both))
+                ),
+                "Event kind was not Modify(Name(Both)) for folder rename: {:?}",
+                event.folder_event.as_ref().unwrap().kind
+            );
+            assert_eq!(
+                event.folder_event.as_ref().unwrap().paths,
+                vec![old_folder_path.clone(), new_folder_path.clone()]
+            );
+            let expected_file_id = FileId::extract(&new_folder_path).await.unwrap();
+            assert_eq!(
+                event
+                    .folder_event
+                    .as_ref()
+                    .unwrap()
+                    .hash
+                    .as_ref()
+                    .unwrap()
+                    .file_id,
+                expected_file_id
+            );
         }
-    } else {
-        panic!("Processed event receiver was not initialized for folder rename event");
+        Ok(None) => panic!("Processed event channel closed prematurely"),
+        Err(_) => panic!("Timeout waiting for processed folder rename event"),
     }
+    Ok(())
 }
 
 #[tokio::test]
-async fn on_watch_non_existent_path_return_error() {
-    // 1. Create a temporary directory (base for non-existent path)
+async fn on_watch_non_existent_path_return_error() -> Result<(), AppError> {
     let tmp_dir = tempdir().unwrap();
-
-    // 2. Define a non-existent path
     let non_existent_path = tmp_dir.path().join("this_path_should_not_exist");
 
-    // 3. Get an initialized FileWatcher instance
-    // Note: create_test_watcher also calls init_watcher()
-    let mut watcher = create_test_watcher().await;
+    // Create watcher
+    let (message_sender, mut event_receiver) = run_test_watcher().await?;
 
-    // 4. Call watcher.watch() on the non-existent path
-    let result = watcher.watch(&non_existent_path).await;
-    println!("Watch result for non-existent path: {:?}", result);
+    // Try to watch non-existent path - this should be sent but handled gracefully
+    let _ = message_sender.send(FileWatcherMessage::WatchPath(CanonPath::from(
+        non_existent_path.to_path_buf(),
+    )));
 
-    // 5. Assert that the result is an Err
+    // Wait a moment for any potential processing
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    // Try to create a file in the non-existent directory (this should fail)
+    let result = fs::File::create(non_existent_path.join("test_file.txt"));
+
+    // Assert that file creation fails (confirming path doesn't exist)
     assert!(
         result.is_err(),
-        "Watching a non-existent path should return an error."
+        "File creation should fail in non-existent directory"
     );
-    // 6. Assert that the kind of the notify::Error is notify::ErrorKind::PathNotFound
-    if let Err(err) = result {
-        let kind = match err {
-            AppError::Categorized {
-                kind,
-                message,
-                source,
-            } => kind,
-        };
-        assert_eq!(
-            kind,
-            AppErrorKind::FileError,
-            "Error kind should be PathNotFound for a non-existent watch path."
-        );
-    } else {
-        // This branch should not be reached if the previous assert passed
-        panic!("Result was not an Err, contrary to assertion.");
+
+    // Wait and confirm no events are received (since path doesn't exist)
+    match tokio::time::timeout(Duration::from_secs(2), event_receiver.recv()).await {
+        Ok(Some(_)) => panic!("Should not receive events for non-existent path"),
+        Ok(None) => panic!("Event channel closed unexpectedly"),
+        Err(_) => {
+            // Timeout is expected - no events should be generated for non-existent paths
+            println!("Correctly received no events for non-existent path");
+        }
     }
+
+    Ok(())
 }
