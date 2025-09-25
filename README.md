@@ -3,7 +3,7 @@
  <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./app/public/logo_dark.svg">
     <source media="(prefers-color-scheme: light)" srcset="./app/public/logo.svg">
-    <img alt="Logo" src="./app/public/logo.svg">
+    <img alt="Logo" src="./app/public/logo.svg" style="transform: rotate(-90deg);">
   </picture>
 
 <div align="center">
@@ -14,7 +14,7 @@
 
 ##### `"This app is still in early development but aims to help you organize your files, your emails, and your tasks as efficient as possible."`
 
-![GitHub Stars](https://img.shields.io/github/stars/niksingh710/nvix?style=social) ![GitHub Forks](https://img.shields.io/github/forks/niksingh710/nvix?style=social) ![GitHub Issues](https://img.shields.io/github/issues/niksingh710/nvix) ![License: MIT](https://img.shields.io/badge/license-MIT-green) ![Nix Flake Compatible](https://img.shields.io/badge/Nix-Flake_Compatible-blue)
+![GitHub Stars](https://img.shields.io/github/stars/emilyantosch/hestia_tauri?style=social) ![GitHub Forks](https://img.shields.io/github/forks/emilyantosch/hestia_tauri?style=social) ![GitHub Issues](https://img.shields.io/github/issues/emilyantosch/hestia_tauri) ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
 <img width="2000" height="0">
 </td>
