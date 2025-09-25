@@ -1,8 +1,8 @@
 <p align="center" style="color:grey">
 
  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./app/public/logo_dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="./app/public/logo.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="./app/public/20250925_logo_dark_rotated_rev01.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./app/public/20250925_logo_light_rotated_rev01.svg">
     <img alt="Logo" src="./app/public/logo.svg" style="transform: rotate(-90deg);">
   </picture>
 
