@@ -25,17 +25,18 @@
 
 # Hestia
 
+> [!IMPORTANT]
+> This app is in very early development. I am looking to get a pre-alpha version out soon. Expect
+> breaking changes, frequent updates and new features.
+> Contributing is welcome!
+
 Hestia is a **cross-platform file management system** that uses intelligent tagging to organize your files without forcing you to reorganize your existing folder structure. **Built with Rust** for speed and security, it features visual thumbnails for images, videos, PDFs, and documents, plus plans for email, password, and task management integration. Designed **offline-first** with cross-device sync capabilities, Hestia keeps your data secure and accessible across Windows, macOS, Linux, and mobile platforms.
 
 ## Features
 
-- **Modular by Design:** Each feature and plugin is its own module. Mix, match, or extend as you need.
-- **Multiple Configurations:**
-  - **Bare:** Minimal setup for fast, distraction-free editing and server use.
-  - **Core:** Daily-driver configuration with LSP and language support.
-  - **Full:** Comprehensive environment including advanced plugins (LaTeX, etc.).
-- **Easy Customization:** Import only what you want, or override settings in `config.nvix`.
-- **Flake Native:** Built for the modern Nix ecosystem.
+- **Built for Performance, Security and Robustness:** Hestia is designed to keep all your data safe and secure, while not compromising on speed or robustness!
+- **Cross-Platform:** Use the app across all your devices using Windows, MacOS, Linux, Android or iOS.
+- **Customization, the way you want it:** Customize everything, from the app, using the config file or configuration managers like home-manager!
 
 ## Quickstart
 
@@ -53,66 +54,35 @@ deno task tauri dev
 
 This should compile the rust code base and start the development server as well as the app itself.
 
-> [!NOTE]
-> Now no need for ~--accept-flake-config~ flag, as Nvix's all package are already cached in the nixos cache
-
-## Installation
-
-### Prerequisites
-
-- [Nix Package Manager](https://nixos.org/download.html) (multi-user recommended)
-- Flakes enabled (`experimental-features = nix-command flakes`)
-- Familiarity with [NixOS](https://nixos.org/) or [Home Manager](https://nix-community.github.io/home-manager/) is helpful
-
-**Install Nix (multi-user):**
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \
-    sh -s -- install --no-confirm --extra-conf "trusted-users = $(whoami)"
-```
-
-### Add Nvix as a flake input
-
 ## FAQs
 
-**What is Nvix for?**
-Nvix started as a Nix learning experiment and evolved into a robust, composable Neovim configuration framework.
+**What is Hestia for?**
+Hestia is a file manager first and foremost. I have been looking for a file manager that allows me to save all of my documents, files, sounds, songs and whatever in an easy to access way. Since I could not find what I was looking for, I made my own!
 
-**Why three configurations?**
+**Why did you decide to use X architecture/language/framework?**
+I tried to build the app based on what I believe works best and what I would have the most fun working with. So far I'm pretty happy. If you have suggestions or improvements, open an issue and let's discuss that!
 
-- `bare`: Minimal, distraction-free
-- `core`: Daily usage with LSP and language support
-- `full`: Advanced workflows such as LaTeX
-
-**Can I use just one module?**
-Absolutely. Nvix is designed so you can import only what you need.
+**Are you planning to make money off this?**
+Honestly, yes. I don't want to charge people exorbitant amounts of money, but maybe a lifetime purchase for more premium features, with contributors staying free of course.
 
 **Are contributions welcome?**
 Yes! Docs, configs, plugins, suggestions—all are valued. Open a PR or issue.
 
-**Why only some options in `config.nvix`?**
-[Nixvim](https://github.com/nix-community/nixvim) already exposes most customization options. Nvix adds curated, ready-to-use modules.
+**What do I do, when there is a question that hasn't been answered here?**
+Open an issue, write me an email or, if that happens to be useful, I was thinking about opening a discord server. Just let me know!
 
 ### Contributing
 
 > Just keep it simple, stupid! -> `kiss` design principle
 
-You’re welcome to contribute in any way:
-
-- Improve docs or fix typos
-- Suggest features or plugin support
-- Enhance language/LSP integration
-
-> [!IMPORTANT]
-
-```sh
-git clone --single-branch --branch master https://github.com/niksingh710/nvix.git
-
-# ssh
-git clone --single-branch --branch master git@github.com:niksingh710/nvix.git
-```
+You’re welcome to contribute in any way!
 
 Please open an issue or PR with your ideas or improvements!
+
+> [!NOTE]
+> I am contemplating opening a Youtube Channel once I get around to doing it, where I would also like
+> to show off the project. If you are not comfortable with your code or name seen on the channel,
+> please let me know!
 
 ### License
 
@@ -126,5 +96,3 @@ This project is licensed under the [MIT License](./LICENSE).
 > I started working Hestia as a personal project, because I didn't find what I wanted with other similar tools.
 > If you also happen to find it useful, please consider starring the repository or open a pull request as per the Contributing section!
 > Thank you so much for your time!
-
-Have questions or suggestions? [Open an issue](https://github.com/emilyantosch/hestia_tauri/issues)—I’m always happy to help.
