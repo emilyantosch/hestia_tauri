@@ -472,6 +472,7 @@ impl ThumbnailProcessor {
         self.queue_files_for_processing(files, ThumbnailSize::all().to_vec())
             .await
     }
+
     async fn queue_single_file(
         &mut self,
         file_id: i32,
