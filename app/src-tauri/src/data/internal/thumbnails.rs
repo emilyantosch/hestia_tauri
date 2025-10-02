@@ -133,7 +133,7 @@ impl Thumbnail {
     }
 
     /// Creates thumbnail from SeaORM Model
-    pub fn from_model(model: thumbnails::Model) -> Result<Self, ThumbnailError> {
+    pub fn from_model(model: thumbnails::Model) -> Result<Self> {
         let size = ThumbnailSize::try_from(model.size)?;
 
         Ok(Self {

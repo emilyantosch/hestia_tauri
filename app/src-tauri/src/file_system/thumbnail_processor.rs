@@ -608,7 +608,15 @@ impl ThumbnailProcessorHandler {
     }
 
     pub async fn queue_missing_files(&self) -> Result<()> {
-        self.sender.send(ThumbnailMessage::QueueMissingFiles)?;
+        match self.sender.send(ThumbnailMessage::QueueMissingFiles) {
+            Ok(()) => {
+                info!("Thumbnail tasked with creating missing thumbnails");
+            }
+            Err(e) => {
+                error!("Sending message to creating missing thumbnails failed due to: {e}");
+                return Err(e)?;
+            }
+        }
         Ok(())
     }
 

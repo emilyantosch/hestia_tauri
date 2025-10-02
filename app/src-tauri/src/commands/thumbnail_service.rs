@@ -3,11 +3,14 @@ use tokio::sync::Mutex;
 
 use crate::{
     config::app::AppState,
+    data::thumbnails::ThumbnailSize,
     errors::{StateError, ThumbnailError},
 };
 
 #[tauri::command]
 pub async fn get_thumbnails_for_filter(
+    size: ThumbnailSize,
+    reader: tauri::ipc::Channel<&[u8]>,
     app_state: State<'_, Mutex<AppState>>,
 ) -> Result<(), ThumbnailError> {
     {
@@ -33,5 +36,14 @@ pub async fn generate_missing_thumbnails_for_library(
             }
         }
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_all_thumbnails_for_size(
+    size: ThumbnailSize,
+    reader: tauri::ipc::Channel<&[u8]>,
+    app_state: State<'_, Mutex<AppState>>,
+) -> Result<(), ThumbnailError> {
     Ok(())
 }

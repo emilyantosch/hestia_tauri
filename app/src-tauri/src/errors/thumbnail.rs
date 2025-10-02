@@ -4,6 +4,9 @@ pub enum ThumbnailError {
     #[error("Image decoding failed: {0}")]
     ImageDecode(#[from] image::ImageError),
 
+    #[error("The thumbnail is not in the database. Is it already generated?")]
+    ThumbnailNotFound,
+
     #[error("File I/O error: {0}")]
     Io(#[from] std::io::Error),
 
