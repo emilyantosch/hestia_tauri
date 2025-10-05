@@ -5,7 +5,7 @@ use tracing::{error, info};
 use crate::{
     config::library::Library,
     data::{thumbnails::ThumbnailGenerator, watched_folders::WatchedFolderTree},
-    database::{thumbnail_repository, DatabaseManager, FileOperations, ThumbnailRepository},
+    database::{thumbnail_repository, DatabaseManager, FileOperations, ThumbnailOperations},
     errors::{DbError, LibraryError, ScannerError},
     file_system::{
         DatabaseFileWatcherEventHandler, DirectoryScanner, FileWatcher, FileWatcherHandler,
@@ -68,7 +68,7 @@ impl AppState {
         let (thumbnail_processor_handler, thumbnail_msg_receiver) =
             ThumbnailProcessorHandler::new();
         let thumbnail_generator = ThumbnailGenerator::new();
-        let thumbnail_repository = ThumbnailRepository::new(Arc::clone(&database_manager));
+        let thumbnail_repository = ThumbnailOperations::new(Arc::clone(&database_manager));
         let thumbnail_processor = ThumbnailProcessor::new(
             thumbnail_msg_receiver,
             Arc::new(thumbnail_repository),

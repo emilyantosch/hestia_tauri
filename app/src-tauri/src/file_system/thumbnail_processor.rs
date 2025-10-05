@@ -1,6 +1,6 @@
 use crate::data::file::File;
 use crate::data::internal::thumbnails::{ThumbnailGenerator, ThumbnailSize};
-use crate::database::thumbnail_repository::ThumbnailRepository;
+use crate::database::thumbnail_repository::ThumbnailOperations;
 use crate::errors::{AppError, ThumbnailError};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -106,7 +106,7 @@ impl Default for ProcessingStats {
 pub struct ThumbnailWorker {
     worker_id: usize,
     job_queue: Arc<Mutex<Vec<ThumbnailJob>>>,
-    repository: Arc<ThumbnailRepository>,
+    repository: Arc<ThumbnailOperations>,
     generator: Arc<ThumbnailGenerator>,
     stats: Arc<Mutex<ProcessingStats>>,
     config: ProcessorConfig,
@@ -116,7 +116,7 @@ impl ThumbnailWorker {
     pub fn new(
         worker_id: usize,
         job_queue: Arc<Mutex<Vec<ThumbnailJob>>>,
-        repository: Arc<ThumbnailRepository>,
+        repository: Arc<ThumbnailOperations>,
         generator: Arc<ThumbnailGenerator>,
         stats: Arc<Mutex<ProcessingStats>>,
         config: ProcessorConfig,
@@ -292,7 +292,7 @@ impl ThumbnailWorker {
 pub struct ThumbnailProcessor {
     message_receiver: mpsc::UnboundedReceiver<ThumbnailMessage>,
     job_queue: Arc<Mutex<Vec<ThumbnailJob>>>,
-    repository: Arc<ThumbnailRepository>,
+    repository: Arc<ThumbnailOperations>,
     generator: Arc<ThumbnailGenerator>,
     stats: Arc<Mutex<ProcessingStats>>,
     config: ProcessorConfig,
@@ -302,7 +302,7 @@ pub struct ThumbnailProcessor {
 impl ThumbnailProcessor {
     pub fn new(
         message_receiver: mpsc::UnboundedReceiver<ThumbnailMessage>,
-        repository: Arc<ThumbnailRepository>,
+        repository: Arc<ThumbnailOperations>,
         generator: Arc<ThumbnailGenerator>,
     ) -> Self {
         Self {

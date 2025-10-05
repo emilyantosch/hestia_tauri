@@ -25,11 +25,11 @@ pub struct ThumbnailStats {
 
 /// Repository for thumbnail database operations
 #[derive(Debug)]
-pub struct ThumbnailRepository {
+pub struct ThumbnailOperations {
     database_manager: Arc<DatabaseManager>,
 }
 
-impl ThumbnailRepository {
+impl ThumbnailOperations {
     pub fn new(database_manager: Arc<DatabaseManager>) -> Self {
         Self { database_manager }
     }
@@ -428,7 +428,7 @@ mod tests {
     #[tokio::test]
     async fn test_thumbnail_repository_creation() {
         let db_manager = Arc::new(DatabaseManager::new_sqlite_default().await.unwrap());
-        let repository = ThumbnailRepository::new(db_manager);
+        let repository = ThumbnailOperations::new(db_manager);
 
         // Just test that the repository can be created
         assert!(matches!(

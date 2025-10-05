@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::config::app::AppState;
+use crate::{config::app::AppState, data::filter::Filter, errors::DbError};
 use entity::files;
 
 /// Response for file scanning operations
@@ -225,5 +225,24 @@ pub async fn file_exists_in_database(
         Ok(Some(_)) => Ok(true),
         Ok(None) => Ok(false),
         Err(e) => Err(format!("Failed to check file existence: {e:#?}")),
+    }
+}
+
+#[tauri::command]
+pub async fn get_files_for_filter(
+    filter: Filter,
+    app_state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<FileInfo>, DbError> {
+    {
+        let state = app_state.lock().await;
+        let files = state
+            .file_operations
+            .get_files_for_filter(filter)
+            .await
+            .map_err(|_| DbError::QueryError)?
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        Ok(files)
     }
 }
