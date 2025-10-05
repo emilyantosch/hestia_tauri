@@ -561,8 +561,8 @@ impl FileOperations {
     pub async fn get_watched_folder_map(&self) -> Result<HashMap<String, WatchedFolderTree>> {
         let mut map = HashMap::new();
 
-        let transaction = self.database_manager.get_connection().begin().await?;
-        let folders = Folders::find().all(&transaction).await?;
+        let connection = self.database_manager.get_connection();
+        let folders = Folders::find().all(&*connection).await?;
 
         let (with_parent, without_parent): (Vec<folders::Model>, Vec<folders::Model>) = folders
             .into_iter()
@@ -587,7 +587,7 @@ impl FileOperations {
                 .select_only()
                 .column(folders::Column::Id)
                 .filter(folders::Column::ParentFolderId.eq(folder.id))
-                .all(&transaction)
+                .all(&*connection)
                 .await?;
             let children_array: Option<Vec<String>> = if children.is_empty() {
                 None

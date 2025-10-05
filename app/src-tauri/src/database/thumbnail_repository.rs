@@ -436,7 +436,4 @@ mod tests {
             crate::config::database::DatabaseType::Sqlite
         ));
     }
-
-    // NOTE: More comprehensive tests would require database setup/teardown
-    // These would be better placed in integration tests
 }
