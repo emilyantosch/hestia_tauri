@@ -411,6 +411,25 @@ impl ThumbnailOperations {
 
         Ok(delete_result.rows_affected)
     }
+
+    pub async fn get_thumbnails_for_filter(
+        &self,
+        file_ids: Vec<i32>,
+        size: ThumbnailSize,
+    ) -> Result<Vec<Thumbnail>> {
+        let connection = self.database_manager.get_connection();
+        let thumbnails = Thumbnails::find()
+            .filter(thumbnails::Column::FileId.is_in(file_ids))
+            .filter(thumbnails::Column::Size.eq(size.to_string()))
+            .all(&*connection)
+            .await?;
+
+        Ok(thumbnails
+            .into_iter()
+            .map(TryInto::try_into)
+            .map(|x| x.unwrap())
+            .collect())
+    }
 }
 
 #[cfg(test)]

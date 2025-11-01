@@ -36,6 +36,10 @@ impl ThumbnailSize {
     pub const fn all() -> [ThumbnailSize; 3] {
         [Self::Small, Self::Medium, Self::Large]
     }
+
+    pub const fn fallback() -> ThumbnailSize {
+        Self::Medium
+    }
 }
 
 impl fmt::Display for ThumbnailSize {
@@ -147,6 +151,22 @@ impl Thumbnail {
     /// Returns true if this is an image thumbnail (not a file icon)
     pub fn is_image(&self) -> bool {
         self.mime_type == "image/png" || self.mime_type.starts_with("image/")
+    }
+}
+
+impl From<thumbnails::Model> for Thumbnail {
+    fn from(model: thumbnails::Model) -> Self {
+        let size = match ThumbnailSize::try_from(model.size) {
+            Ok(size) => size,
+            Err(_) => ThumbnailSize::fallback(),
+        };
+
+        Self {
+            size,
+            data: model.data,
+            mime_type: model.mime_type,
+            file_size: model.file_size as usize,
+        }
     }
 }
 
