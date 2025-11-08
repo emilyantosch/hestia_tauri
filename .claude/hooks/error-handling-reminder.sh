@@ -9,4 +9,4 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-cat | npx tsx error-handling-reminder.ts
+cat | deno run --allow-all error-handling-reminder.ts

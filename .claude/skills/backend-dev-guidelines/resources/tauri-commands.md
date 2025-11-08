@@ -8,11 +8,11 @@
 
 ## Overview
 
-Tauri commands are Rust functions marked with the `#[command]` attribute that can be invoked from the frontend TypeScript code. They serve as the entry point to your backend logic, handling IPC communication and delegating to the service/controller layer.
+Tauri commands are Rust functions marked with the `#[tauri::command]` attribute that can be invoked from the frontend TypeScript code. They serve as the entry point to your backend logic, handling IPC communication and delegating to the service/controller layer.
 
 ### Key Characteristics
 
-- Marked with `#[command]` attribute
+- Marked with `#[tauri::command]` attribute
 - Can inject application state via `State<'_, Mutex<AppState>>`
 - Return `Result<T, E>` where both `T` and `E` implement `Serialize`
 - Can be synchronous or asynchronous (`async fn`)
@@ -25,7 +25,7 @@ Frontend (invoke)
     ↓
 Tauri IPC Layer
     ↓
-Command Handler (#[command]) ← YOU ARE HERE
+Command Handler (#[tauri::command]) ← YOU ARE HERE
     ↓
 Controller (validates, delegates)
     ↓
@@ -49,9 +49,7 @@ Repository (database)
 ### Minimal Command
 
 ```rust
-use tauri::command;
-
-#[command]
+#[tauri::command]
 pub fn greet(name: String) -> String {
     format!("Hello, {}!", name)
 }
@@ -67,7 +65,6 @@ const greeting = await invoke<string>('greet', { name: 'Alice' });
 ### Command with Result
 
 ```rust
-use tauri::command;
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -75,7 +72,7 @@ pub struct ValidationError {
     pub message: String,
 }
 
-#[command]
+#[tauri::command]
 pub fn validate_email(email: String) -> Result<bool, ValidationError> {
     if email.contains('@') {
         Ok(true)
@@ -125,11 +122,11 @@ pub struct AppState {
 ### Injecting State
 
 ```rust
-use tauri::{command, State};
+use tauri::State;
 use std::sync::Mutex;
 use crate::config::app::AppState;
 
-#[command]
+#[tauri::command]
 pub async fn get_user_count(
     app_state: State<'_, Mutex<AppState>>
 ) -> Result<usize, String> {
@@ -153,7 +150,7 @@ pub async fn get_user_count(
 
 ```rust
 // ❌ NEVER: Hold lock across await points
-#[command]
+#[tauri::command]
 pub async fn bad_example(app_state: State<'_, Mutex<AppState>>) -> Result<(), String> {
     let state = app_state.lock().unwrap();
     // Lock held here...
@@ -163,7 +160,7 @@ pub async fn bad_example(app_state: State<'_, Mutex<AppState>>) -> Result<(), St
 }
 
 // ✅ ALWAYS: Release lock before async operations
-#[command]
+#[tauri::command]
 pub async fn good_example(app_state: State<'_, Mutex<AppState>>) -> Result<(), String> {
     let connection = {
         let state = app_state.lock().unwrap();
@@ -204,6 +201,7 @@ pub async fn internal_operation() -> Result<Data> {
 use serde::{Serialize, Deserialize};
 use thiserror::Error;
 
+// Please note that this is is not where you should put Errors and AppError is not a valid (make them more specific!)
 #[derive(Debug, Error, Serialize, Deserialize)]
 pub enum AppError {
     #[error("Database error: {0}")]
@@ -216,7 +214,7 @@ pub enum AppError {
     Validation(String),
 }
 
-#[command]
+#[tauri::command]
 pub async fn create_user(
     app_state: State<'_, Mutex<AppState>>,
     name: String,
