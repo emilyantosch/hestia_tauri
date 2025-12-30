@@ -5,7 +5,7 @@ use tracing::{error, info};
 use crate::{
     config::library::Library,
     data::{thumbnails::ThumbnailGenerator, watched_folders::WatchedFolderTree},
-    database::{thumbnail_repository, DatabaseManager, FileOperations, ThumbnailRepository},
+    database::{thumbnail_repository, DatabaseManager, FileOperations, ThumbnailOperations},
     errors::{DbError, LibraryError, ScannerError},
     file_system::{
         DatabaseFileWatcherEventHandler, DirectoryScanner, FileWatcher, FileWatcherHandler,
@@ -44,11 +44,31 @@ impl AppState {
         // Load last library or create new one
         let library = Library::last_or_new();
 
+        Ok(Self {
+            library,
+            database_manager,
+            file_operations,
+            directory_scanner,
+            file_watcher_handler: None,
+            thumbnail_processor_handler: None,
+        })
+    }
+
+    async fn create_new_thumbnail_engine(
+        &mut self,
+        database_manager: Arc<DatabaseManager>,
+    ) -> Result<()> {
+        if let Some(ref handler) = self.thumbnail_processor_handler {
+            info!("Shutting down Thumbnail Engine!");
+            handler.shutdown().await?;
+        }
+        info!("Creating new thumbnail engine");
         // Create the thumbnail processor, which (I hope) is library-agnostic
+        info!("Creating new thumbnail processor!");
         let (thumbnail_processor_handler, thumbnail_msg_receiver) =
             ThumbnailProcessorHandler::new();
         let thumbnail_generator = ThumbnailGenerator::new();
-        let thumbnail_repository = ThumbnailRepository::new(Arc::clone(&database_manager));
+        let thumbnail_repository = ThumbnailOperations::new(Arc::clone(&database_manager));
         let thumbnail_processor = ThumbnailProcessor::new(
             thumbnail_msg_receiver,
             Arc::new(thumbnail_repository),
@@ -60,15 +80,8 @@ impl AppState {
                 error!("Thumbnail Engine failed to start properly! Reason: {e}");
             }
         });
-
-        Ok(Self {
-            library,
-            database_manager,
-            file_operations,
-            directory_scanner,
-            file_watcher_handler: None,
-            thumbnail_processor_handler: Some(thumbnail_processor_handler),
-        })
+        self.thumbnail_processor_handler = Some(thumbnail_processor_handler);
+        Ok(())
     }
 
     /// Switch to a new library and update all dependent components
@@ -131,12 +144,15 @@ impl AppState {
 
         // Preload file type cache for better performance
         if let Err(e) = self.file_operations.preload_file_type_cache().await {
-            error!("Warning: Failed to preload file type cache: {:?}", e);
+            tracing::warn!("Warning: Failed to preload file type cache: {:?}", e);
         }
 
         // Recreate directory scanner with new file operations
         let file_operations_for_scanner = FileOperations::new(Arc::clone(&self.database_manager));
         self.directory_scanner = DirectoryScanner::new(Arc::new(file_operations_for_scanner));
+
+        self.create_new_thumbnail_engine(self.database_manager.clone())
+            .await?;
 
         info!("Successfully reinitialized components");
         Ok(())

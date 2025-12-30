@@ -101,6 +101,7 @@ export function WatchedFoldersTree() {
   const watched_folder_tree = data as Record<string, WatchedFolder> | undefined;
 
   if (watched_folder_tree) {
+    console.log(watched_folder_tree);
     const tree = useTree<WatchedFolder>({
       initialState: {
         expandedItems: ["0"],

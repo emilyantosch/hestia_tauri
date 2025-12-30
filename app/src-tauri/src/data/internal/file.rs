@@ -18,7 +18,7 @@ pub struct File {
 impl From<files::Model> for File {
     fn from(value: files::Model) -> Self {
         let path = PathBuf::from(&value.path);
-        let file_type_name = File::detect_file_type(&path.as_path());
+        let file_type_name = File::detect_file_type(path.as_path());
         File {
             id: Some(value.id),
             path,

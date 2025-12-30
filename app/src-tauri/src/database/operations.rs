@@ -5,18 +5,20 @@ use std::sync::Arc;
 use tracing::{event, info, instrument};
 
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DatabaseTransaction, DbErr,
-    EntityOrSelect, EntityTrait, IntoActiveModel, QueryFilter, QuerySelect, Set, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection,
+    DatabaseTransaction, DbErr, EntityOrSelect, EntityTrait, IntoActiveModel, QueryFilter,
+    QuerySelect, Set, TransactionTrait,
 };
 use tokio::sync::RwLock;
 
-use entity::{file_system_identifier, file_types, files, folders, prelude::*};
+use entity::{file_has_tags, file_system_identifier, file_types, files, folders, prelude::*};
 
 use crate::data::commands::watched_folders::WatchedFolderTree;
 
 use crate::data::file::File;
+use crate::data::filter::{Filter, FolderFilter, TagFilter};
 use crate::data::folder::Folder;
-use crate::database::{DatabaseManager, ThumbnailRepository};
+use crate::database::{DatabaseManager, ThumbnailOperations};
 use crate::errors::DbError;
 use crate::file_system::{FileEvent, FileId, FolderEvent};
 
@@ -50,12 +52,12 @@ pub struct UpsertFolderBatchReport {
 pub struct FileOperations {
     database_manager: Arc<DatabaseManager>,
     file_type_cache: Arc<RwLock<HashMap<String, i32>>>,
-    thumbnail_repository: ThumbnailRepository,
+    thumbnail_repository: ThumbnailOperations,
 }
 
 impl FileOperations {
     pub fn new(database_manager: Arc<DatabaseManager>) -> Self {
-        let thumbnail_repository = ThumbnailRepository::new(Arc::clone(&database_manager));
+        let thumbnail_repository = ThumbnailOperations::new(Arc::clone(&database_manager));
 
         Self {
             database_manager,
@@ -65,7 +67,7 @@ impl FileOperations {
     }
 
     /// Get a reference to the thumbnail repository
-    pub fn thumbnail_repository(&self) -> &ThumbnailRepository {
+    pub fn thumbnail_repository(&self) -> &ThumbnailOperations {
         &self.thumbnail_repository
     }
 
@@ -561,8 +563,8 @@ impl FileOperations {
     pub async fn get_watched_folder_map(&self) -> Result<HashMap<String, WatchedFolderTree>> {
         let mut map = HashMap::new();
 
-        let transaction = self.database_manager.get_connection().begin().await?;
-        let folders = Folders::find().all(&transaction).await?;
+        let connection = self.database_manager.get_connection();
+        let folders = Folders::find().all(&*connection).await?;
 
         let (with_parent, without_parent): (Vec<folders::Model>, Vec<folders::Model>) = folders
             .into_iter()
@@ -587,7 +589,7 @@ impl FileOperations {
                 .select_only()
                 .column(folders::Column::Id)
                 .filter(folders::Column::ParentFolderId.eq(folder.id))
-                .all(&transaction)
+                .all(&*connection)
                 .await?;
             let children_array: Option<Vec<String>> = if children.is_empty() {
                 None
@@ -932,6 +934,52 @@ impl FileOperations {
         }
 
         Ok(())
+    }
+
+    /*
+     * SELECT name
+     * FROM files f
+     * LEFT JOIN file_has_tags fht ON fht.file_id = f.id
+     * WHERE fht.id = tag.id AND fht.id = tag.id AND (f.path like folderPath% OR f.path like folderPath%)
+     */
+    pub async fn get_files_for_filter(&self, filter: Filter) -> Result<Vec<files::Model>> {
+        let connection = self.database_manager.get_connection();
+        let mut folder_condition: Condition = Condition::any();
+        let mut tag_condition: Condition = Condition::all();
+        match (filter.tag_filter.as_ref(), filter.folder_filter.as_ref()) {
+            (Some(tf), Some(ff)) => {
+                folder_condition = self.get_folder_filter_condition(ff)?;
+                tag_condition = self.get_tag_filter_condition(tf)?;
+            }
+            (Some(tf), None) => tag_condition = self.get_tag_filter_condition(tf)?,
+            (None, Some(ff)) => folder_condition = self.get_folder_filter_condition(ff)?,
+            (None, None) => (),
+        };
+        let files = Files::find()
+            .left_join(file_has_tags::Entity)
+            .filter(folder_condition)
+            .filter(tag_condition)
+            .all(&*connection)
+            .await?;
+        Ok(files)
+    }
+
+    fn get_folder_filter_condition(&self, ff: &FolderFilter) -> Result<Condition> {
+        let mut folder_condition = Condition::any();
+        for folder in &ff.folders {
+            folder_condition = folder_condition.add(
+                files::Column::Path.like(format!("{}%", folder.to_string_lossy().to_string())),
+            );
+        }
+        Ok(folder_condition)
+    }
+
+    fn get_tag_filter_condition(&self, tf: &TagFilter) -> Result<Condition> {
+        let mut tag_condition = Condition::all();
+        for tag in &tf.tags {
+            tag_condition = tag_condition.add(file_has_tags::Column::TagId.eq(tag.id));
+        }
+        Ok(tag_condition)
     }
 
     async fn _find_root_folders<C>(&self, transaction: &C) -> Result<Vec<folders::Model>>

@@ -25,11 +25,11 @@ pub struct ThumbnailStats {
 
 /// Repository for thumbnail database operations
 #[derive(Debug)]
-pub struct ThumbnailRepository {
+pub struct ThumbnailOperations {
     database_manager: Arc<DatabaseManager>,
 }
 
-impl ThumbnailRepository {
+impl ThumbnailOperations {
     pub fn new(database_manager: Arc<DatabaseManager>) -> Self {
         Self { database_manager }
     }
@@ -82,6 +82,50 @@ impl ThumbnailRepository {
 
         let models = Thumbnails::find()
             .filter(thumbnails::Column::FileId.eq(file_id))
+            .all(db.as_ref())
+            .await
+            .context("Failed to query thumbnails for file")?;
+
+        let thumbnails: Result<Vec<Thumbnail>, _> =
+            models.into_iter().map(Thumbnail::from_model).collect();
+
+        thumbnails.context("Failed to convert thumbnail models")
+    }
+
+    /// Get thumbnail for a specific file and size
+    pub async fn get_thumbnail_for_file_and_size(
+        &self,
+        file_id: i32,
+        size: ThumbnailSize,
+    ) -> Result<Thumbnail> {
+        let db = self.database_manager.get_connection();
+
+        let model = Thumbnails::find()
+            .filter(thumbnails::Column::FileId.eq(file_id))
+            .filter(thumbnails::Column::Size.eq(size.to_string()))
+            .one(db.as_ref())
+            .await
+            .context("Failed to query thumbnails for file")?;
+
+        let thumbnails = match model {
+            Some(m) => Thumbnail::from_model(m),
+            None => Err(ThumbnailError::ThumbnailNotFound)?,
+        };
+
+        thumbnails.context("Failed to convert thumbnail models")
+    }
+
+    /// Get all thumbnail for a specific range of files and sizes
+    pub async fn get_all_thumbnails_for_files_and_size(
+        &self,
+        file_id: Vec<i32>,
+        size: ThumbnailSize,
+    ) -> Result<Vec<Thumbnail>> {
+        let db = self.database_manager.get_connection();
+
+        let models = Thumbnails::find()
+            .filter(thumbnails::Column::FileId.is_in(file_id))
+            .filter(thumbnails::Column::Size.eq(size.to_string()))
             .all(db.as_ref())
             .await
             .context("Failed to query thumbnails for file")?;
@@ -367,6 +411,25 @@ impl ThumbnailRepository {
 
         Ok(delete_result.rows_affected)
     }
+
+    pub async fn get_thumbnails_for_filter(
+        &self,
+        file_ids: Vec<i32>,
+        size: ThumbnailSize,
+    ) -> Result<Vec<Thumbnail>> {
+        let connection = self.database_manager.get_connection();
+        let thumbnails = Thumbnails::find()
+            .filter(thumbnails::Column::FileId.is_in(file_ids))
+            .filter(thumbnails::Column::Size.eq(size.to_string()))
+            .all(&*connection)
+            .await?;
+
+        Ok(thumbnails
+            .into_iter()
+            .map(TryInto::try_into)
+            .map(|x| x.unwrap())
+            .collect())
+    }
 }
 
 #[cfg(test)]
@@ -384,7 +447,7 @@ mod tests {
     #[tokio::test]
     async fn test_thumbnail_repository_creation() {
         let db_manager = Arc::new(DatabaseManager::new_sqlite_default().await.unwrap());
-        let repository = ThumbnailRepository::new(db_manager);
+        let repository = ThumbnailOperations::new(db_manager);
 
         // Just test that the repository can be created
         assert!(matches!(
@@ -392,7 +455,4 @@ mod tests {
             crate::config::database::DatabaseType::Sqlite
         ));
     }
-
-    // NOTE: More comprehensive tests would require database setup/teardown
-    // These would be better placed in integration tests
 }

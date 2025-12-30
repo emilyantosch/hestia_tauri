@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use tokio::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
-use tauri::{command, State};
+use tauri::State;
 
-use crate::config::app::AppState;
+use crate::{config::app::AppState, data::filter::Filter, errors::DbError};
 use entity::files;
 
 /// Response for file scanning operations
@@ -55,7 +55,7 @@ impl From<files::Model> for FileInfo {
     }
 }
 /// Scan a directory and sync files to database
-#[command]
+#[tauri::command]
 pub async fn scan_directory(
     app_state: State<'_, Mutex<AppState>>,
     directory_path: String,
@@ -94,7 +94,7 @@ pub async fn scan_directory(
 }
 
 /// Get file information by path
-#[command]
+#[tauri::command]
 pub async fn get_file_by_path(
     app_state: State<'_, Mutex<AppState>>,
     file_path: String,
@@ -114,7 +114,7 @@ pub async fn get_file_by_path(
 }
 
 /// Get all files in a directory
-#[command]
+#[tauri::command]
 pub async fn get_files_in_directory(
     app_state: State<'_, Mutex<AppState>>,
     directory_path: String,
@@ -133,7 +133,7 @@ pub async fn get_files_in_directory(
 }
 
 /// Delete a file record from the database
-#[command]
+#[tauri::command]
 pub async fn delete_file_by_path(
     app_state: State<'_, Mutex<AppState>>,
     file_path: String,
@@ -152,7 +152,7 @@ pub async fn delete_file_by_path(
 }
 
 /// Get file metadata (without database operations)
-#[command]
+#[tauri::command]
 pub async fn get_file_metadata(file_path: String) -> Result<serde_json::Value, String> {
     let path = PathBuf::from(file_path);
 
@@ -209,7 +209,7 @@ pub async fn get_file_metadata(file_path: String) -> Result<serde_json::Value, S
 }
 
 /// Check if a file exists in the database
-#[command]
+#[tauri::command]
 pub async fn file_exists_in_database(
     app_state: State<'_, Mutex<AppState>>,
     file_path: String,
@@ -225,5 +225,24 @@ pub async fn file_exists_in_database(
         Ok(Some(_)) => Ok(true),
         Ok(None) => Ok(false),
         Err(e) => Err(format!("Failed to check file existence: {e:#?}")),
+    }
+}
+
+#[tauri::command]
+pub async fn get_files_for_filter(
+    filter: Filter,
+    app_state: State<'_, Mutex<AppState>>,
+) -> Result<Vec<FileInfo>, DbError> {
+    {
+        let state = app_state.lock().await;
+        let files = state
+            .file_operations
+            .get_files_for_filter(filter)
+            .await
+            .map_err(|_| DbError::QueryError)?
+            .into_iter()
+            .map(Into::into)
+            .collect();
+        Ok(files)
     }
 }
