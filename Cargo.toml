@@ -1,0 +1,129 @@
+[workspace]
+resolver = "3"
+members = ["crates/entity", "crates/app", "crates/migration"]
+
+[profile]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
+
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+
+[workspace.dependencies]
+
+argon2 = { version = "0.6.0-rc.0", features = [] }
+password-hash = { version = "0.6.0-rc.1", features = ["rand_core"] }
+tauri = { version = "2", features = ["webkit2gtk"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "*", features = ["full"] }
+notify = "8.0.0"
+notify-debouncer-full = "0.5.0"
+gtk = "0.18.2"
+rfd = { version = "*", default-features = false, features = ["tokio"] }
+entity = { path = "crates/entity" }
+sea-orm = { version = "1.1.10", features = [
+  "sqlx-sqlite",
+  "runtime-tokio-rustls",
+  "macros",
+  "chrono",
+] }
+anyhow = { version = "1.0.98" }
+thiserror = "2.0.12"
+tempfile = "3.20.0"
+blake3 = "1.8.2"
+async-recursion = "1.1.1"
+async-std = { version = "*", features = ["attributes", "tokio1"] }
+secrecy = "0.10.3"
+cfg-if = "1.0.1"
+keyring = "3.6.2"
+toml = "0.8.23"
+dirs = "6.0.0"
+aes-gcm = "0.10.3"
+rand = "0.9.1"
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+async-trait = "0.1.89"
+tauri-plugin-dialog = "2"
+migration = { path = "crates/migration" }
+image = { version = "0.25", default-features = false, features = [
+  "png",
+  "jpeg",
+  "gif",
+  "webp",
+  "bmp",
+  "tiff",
+] }
+infer = "0.16"
+num_cpus = "1.16"
+
+[workspace.lints.rust]
+future_incompatible = { level = "deny", priority = -1 }
+keyword_idents = { level = "warn", priority = -1 }
+let_underscore = { level = "warn", priority = -1 }
+nonstandard_style = { level = "warn", priority = -1 }
+refining_impl_trait = { level = "warn", priority = -1 }
+unused = { level = "warn", priority = -1 }
+
+macro_use_extern_crate = "warn"
+meta_variable_misuse = "warn"
+missing_copy_implementations = "warn"
+missing_debug_implementations = "warn"
+redundant_lifetimes = "warn"
+unreachable_pub = "warn"
+unsafe_code = "forbid"                 # if this is blocking you, let's discuss in the team
+unstable_features = "forbid"           # if this is blocking you, let's discuss in the team
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_qualifications = "warn"
+
+unused_crate_dependencies = "allow" # too many false positives
+single_use_lifetimes = "allow"      # too many false positives because of anonymous lifetimes in trait being unstable
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "warn"
+private_intra_doc_links = "allow"
+
+[workspace.lints.clippy]
+complexity = { level = "warn", priority = -1 }
+correctness = { level = "deny", priority = -1 }
+perf = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+# # restrictions
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+exit = "warn"
+expect_used = "warn"
+indexing_slicing = "warn"
+panic = "warn"
+string_slice = "warn"
+todo = "warn"
+unimplemented = "warn"
+unreachable = "warn"
+unwrap_used = "warn"
+
+# allowed pedantic
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+manual_string_new = "allow"        # allows `"".to_string()`
+missing_errors_doc = "allow"       # might be nice but this would force us to write docs even if we don't think it's necessary
+missing_panics_doc = "allow"
+items_after_statements = "allow"   # used in table tests
+large_enum_variant = "allow"

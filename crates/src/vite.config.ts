@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(__dirname, "./"),
     },
   },
   // prevent vite from obscuring rust errors
@@ -31,7 +31,7 @@ export default defineConfig({
 
     watch: {
       // tell vite to ignore watching `src-tauri`
-      ignored: ['**/src-tauri/**'],
+      ignored: ['crates/app/**', 'crates/entity/**', 'crates/migration/**'],
     },
   },
   // Env variables starting with the item of `envPrefix` will be exposed in tauri's source code through `import.meta.env`.

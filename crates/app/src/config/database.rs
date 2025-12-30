@@ -490,8 +490,6 @@ impl Default for SqliteConfig {
         let preamble = String::from("sqlite://");
         let app_dir = std::env::current_dir()
             .unwrap_or_else(|_| PathBuf::from("."))
-            .parent()
-            .unwrap_or_else(|| Path::new("."))
             .to_string_lossy()
             .to_string();
         let suffix = String::from("/main.sqlite?mode=rw");

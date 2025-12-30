@@ -217,13 +217,13 @@ impl AppState {
             match self.directory_scanner.sync_directory(&path).await {
                 Ok(report) => {
                     info!(
-                        r"Scanned {}: 
-                        {} files scanned, 
-                        {} folders scanned, 
-                        {} files inserted, 
-                        {} folders inserted, 
-                        {} files updated, 
-                        {} folders updated, 
+                        r"Scanned {}:
+                        {} files scanned,
+                        {} folders scanned,
+                        {} files inserted,
+                        {} folders inserted,
+                        {} files updated,
+                        {} folders updated,
                         {} files deleted,
                         {} folders deleted",
                         path.display(),

@@ -19,7 +19,7 @@ Complete guide to the layered architecture pattern used in backend microservices
 
 ```
 ┌─────────────────────────────────────┐
-│         HTTP Request                │
+│         IPC Request                 │
 └───────────────┬─────────────────────┘
                 ↓
 ┌─────────────────────────────────────┐
@@ -57,6 +57,8 @@ Complete guide to the layered architecture pattern used in backend microservices
                 ↓
 ┌─────────────────────────────────────┐
 │    Database (SQLite/Postgres)       │
+│    - Migrations (crate)             │
+│    - Entities (crate)               │
 └─────────────────────────────────────┘
 ```
 

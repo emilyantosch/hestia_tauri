@@ -7,7 +7,7 @@
     "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./crates/src/*"]
     },
     "externalDependencies": [""]
   },
