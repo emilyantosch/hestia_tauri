@@ -29,9 +29,19 @@
             name = "hestia";
             buildInputs = [
               (rust-bin.stable.latest.default.override { extensions = [ "rust-src" ]; })
+              sea-orm-cli
+              gobject-introspection
+              xorg.libX11
+              atk
+              unixtools.netstat
+              # lsb-release
+              xdg-utils
+              sqlite
+              sqlite.dev
+              openssl.dev
               pkg-config
-              at-spi2-atk
               atkmm
+              at-spi2-atk
               cairo
               gdk-pixbuf
               glib
@@ -40,11 +50,19 @@
               librsvg
               libsoup_3
               pango
-              webkitgtk_4_1
-              openssl
+              libiconv.dev
+            ];
+            nativeBuildInputs = [
+              pkg-config
+              openssl.dev
+              # darwin.libiconv.dev
+            ]
+            ++ lib.optionals pkgs.stdenv.isDarwin [
             ];
             NIX_SHELL = "hestia";
-            shellHook = "nu";
+            shellHook = ''
+              nu
+            '';
           };
       }
     );
