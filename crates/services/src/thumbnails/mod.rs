@@ -1,6 +1,8 @@
+pub mod thumbnails;
+
 use thiserror::Error;
 #[derive(Error, Debug)]
-pub enum ThumbnailError {
+pub enum ThumbnailServiceError {
     #[error("Image decoding failed: {0}")]
     ImageDecode(#[from] image::ImageError),
 
@@ -9,9 +11,6 @@ pub enum ThumbnailError {
 
     #[error("File I/O error: {0}")]
     Io(#[from] std::io::Error),
-
-    #[error("Database error: {0}")]
-    Database(#[from] sea_orm::DbErr),
 
     #[error("Unsupported file type: {mime_type}")]
     UnsupportedFileType { mime_type: String },
@@ -24,4 +23,5 @@ pub enum ThumbnailError {
 
     #[error("File ID for thumbnail generation not provided")]
     FileIdNotProvided,
+
 }

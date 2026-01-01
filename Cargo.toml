@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/entity", "crates/app", "crates/migration"]
+members = ["crates/entity", "crates/app", "crates/migration", "crates/routes", "crates/repositories", "crates/services", "crates/controllers", "crates/model", "crates/config"]
 
 [profile]
 

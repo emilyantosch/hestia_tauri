@@ -1,17 +1,16 @@
 use crate::data::file::File;
 use crate::data::internal::thumbnails::{ThumbnailGenerator, ThumbnailSize};
 use crate::database::thumbnail_repository::ThumbnailOperations;
-use crate::errors::{AppError, ThumbnailError};
+use crate::thumbnails::ThumbnailServiceError;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::time::timeout;
-use tracing::{debug, error, info, warn};
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ThumbnailJobStatus {
+pub(crate) enum ThumbnailJobStatus {
     Pending,
     Processing,
     Completed,
@@ -19,7 +18,7 @@ pub enum ThumbnailJobStatus {
 }
 
 #[derive(Debug, Clone)]
-pub struct ThumbnailJob {
+pub(crate) struct ThumbnailJob {
     pub file_id: i32,
     pub file_path: PathBuf,
     pub size: ThumbnailSize,
@@ -29,7 +28,7 @@ pub struct ThumbnailJob {
 }
 
 #[derive(Debug, Clone)]
-pub struct ProcessingStats {
+pub(crate) struct ProcessingStats {
     pub pending_jobs: usize,
     pub processing_jobs: usize,
     pub completed_jobs: u64,
@@ -66,7 +65,7 @@ pub struct ThumbnailProcessorHandler {
 }
 
 #[derive(Debug, Clone)]
-pub struct ProcessorConfig {
+pub(crate) struct ProcessorConfig {
     pub worker_count: usize,
     pub batch_size: usize,
     pub max_retries: u32,
@@ -194,9 +193,12 @@ impl ThumbnailWorker {
                 {
                     Ok(_) => {
                         let processing_time = start_time.elapsed();
-                        info!(
+                        tracing::info!(
                             "Worker {} successfully generated thumbnail for file {} size {:?} in {:?}",
-                            self.worker_id, job.file_id, job.size, processing_time
+                            self.worker_id,
+                            job.file_id,
+                            job.size,
+                            processing_time
                         );
 
                         // Update stats
@@ -265,9 +267,12 @@ impl ThumbnailWorker {
             let mut stats = self.stats.lock().await;
             stats.failed_jobs += 1;
 
-            warn!(
+            tracing::warn!(
                 "Worker {} job permanently failed after {} retries: file {} size {:?}",
-                self.worker_id, self.config.max_retries, job.file_id, job.size
+                self.worker_id,
+                self.config.max_retries,
+                job.file_id,
+                job.size
             );
         }
     }
