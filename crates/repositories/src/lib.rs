@@ -1,14 +1,35 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+pub mod config;
+pub mod fs;
+pub mod manager;
+pub mod thumbnail;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+#[derive(Debug, Error, Deserialize, Serialize)]
+pub enum DbError {
+    #[error("Database connection could not be established!")]
+    ConnectionError,
+    #[error("Database configuration is invalid!")]
+    ConfigurationError,
+    #[error("Database transaction issue occured!")]
+    TransactionError,
+    #[error("Database query failed!")]
+    QueryError,
+    #[error("Database insert could not be completed!")]
+    InsertError,
+    #[error("Database update could not be completed!")]
+    UpdateError,
+    #[error("Database delete could not be completed!")]
+    DeleteError,
+    #[error("Database rollback failed!")]
+    RollbackError,
+    #[error("Database data integrity has been violated!")]
+    IntegrityConstraintError,
+    #[error("Database foreign key constraint has been violated!")]
+    ReferentialConstraintError,
+    #[error("Database migration could not be completed!")]
+    MigrationError,
+    #[error("SeaORM process has failed!")]
+    SeaOrmError,
 }

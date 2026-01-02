@@ -4,6 +4,14 @@ edition.workspace = true
 version.workspace = true
 
 [dependencies]
+serde = { workspace = true }
+anyhow = { workspace = true }
+sea-orm = { workspace = true }
+thiserror = { workspace = true }
+argon2 = { workspace = true }
+aes-gcm = { workspace = true }
+secrecy = { workspace = true }
+config = { workspace = true }
 
 [lints]
 workspace = true

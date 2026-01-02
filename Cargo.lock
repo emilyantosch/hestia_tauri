@@ -4408,6 +4408,16 @@ dependencies = [
 [[package]]
 name = "repositories"
 version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "argon2",
+ "config",
+ "sea-orm",
+ "secrecy",
+ "serde",
+ "thiserror 2.0.16",
+]
 
 [[package]]
 name = "reqwest"
@@ -4515,6 +4525,10 @@ dependencies = [
 [[package]]
 name = "routes"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "services",
+]
 
 [[package]]
 name = "rsa"
@@ -5088,7 +5102,10 @@ name = "services"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
+ "entity",
  "image",
+ "repositories",
  "serde",
  "thiserror 2.0.16",
  "tokio",
@@ -5999,6 +6016,10 @@ dependencies = [
  "mac",
  "utf-8",
 ]
+
+[[package]]
+name = "tests"
+version = "0.1.0"
 
 [[package]]
 name = "thiserror"

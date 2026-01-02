@@ -10,6 +10,8 @@ tracing = { workspace = true }
 tokio = { workspace = true }
 image = { workspace = true }
 serde = { workspace = true }
-
+entity = { workspace = true }
+chrono = { workspace = true }
+repositories = { workspace = true }
 [lints]
 workspace = true

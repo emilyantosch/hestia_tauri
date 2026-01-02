@@ -1,25 +1,13 @@
-mod commands;
-mod config;
-mod data;
-mod database;
-mod errors;
-mod file_system;
-mod tests;
-mod utils;
+mod state;
 
-use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::config::app::AppState;
-use crate::errors::AppError;
 use crate::file_system::{
     DatabaseFileWatcherEventHandler, DirectoryScanner, FileWatcher, FileWatcherHandler,
     FileWatcherMessage,
 };
-use std::path::PathBuf;
-use tauri::Manager;
-use tokio::sync::mpsc::{self, UnboundedSender};
-use tracing::{debug, error, info, warn};
+
+use state::AppState;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -134,4 +122,37 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+use serde::Serialize;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum AppError {
+    #[error("The file watcher could not be found!")]
+    WatcherNotFound,
+    #[error("An internal error has occurred: {0}")]
+    Internal(#[from] anyhow::Error),
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", content = "message")]
+#[serde(rename_all = "camelCase")]
+enum AppErrorKind {
+    WatcherNotFound(String),
+    Internal(String),
+}
+
+impl Serialize for AppError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let error_message = self.to_string();
+        let error_kind = match self {
+            Self::WatcherNotFound => AppErrorKind::WatcherNotFound(error_message),
+            Self::Internal(_) => AppErrorKind::Internal(error_message),
+        };
+        error_kind.serialize(serializer)
+    }
 }

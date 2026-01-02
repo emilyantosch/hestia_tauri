@@ -1,6 +1,7 @@
-use crate::data::file::File;
 use crate::data::internal::thumbnails::{ThumbnailGenerator, ThumbnailSize};
 use crate::database::thumbnail_repository::ThumbnailOperations;
+
+use crate::model::file::File;
 use crate::thumbnails::ThumbnailServiceError;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};

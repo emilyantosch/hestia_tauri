@@ -1,11 +1,9 @@
 [package]
-name = "routes"
+name = "tests"
 edition.workspace = true
 version.workspace = true
 
 [dependencies]
-serde = { workspace = true }
-services = { workspace = true }
 
 [lints]
 workspace = true
