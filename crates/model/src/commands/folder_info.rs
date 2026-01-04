@@ -1,5 +1,5 @@
+use crate::services::folder::PersistedFolder;
 use serde::{Deserialize, Serialize};
-use services::model::folder::Folder;
 
 /// Folder information for frontend display
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,12 +16,12 @@ pub struct FolderInfo {
     pub updated_at: String,
 }
 
-impl From<Folder> for FolderInfo {
-    fn from(folder: folders::Model) -> Self {
+impl From<PersistedFolder> for FolderInfo {
+    fn from(folder: PersistedFolder) -> Self {
         Self {
             id: folder.id,
             name: folder.name,
-            path: folder.path,
+            path: folder.path.to_string_lossy().to_string(),
             parent_folder_id: folder.parent_folder_id,
             content_hash: folder.content_hash,
             identity_hash: folder.identity_hash,

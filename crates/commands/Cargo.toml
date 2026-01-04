@@ -1,5 +1,5 @@
 [package]
-name = "routes"
+name = "commands"
 edition.workspace = true
 version.workspace = true
 

@@ -923,6 +923,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "commands"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "services",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -934,6 +942,12 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "model",
+ "serde",
+ "tracing",
+]
 
 [[package]]
 name = "const-oid"
@@ -3025,6 +3039,12 @@ dependencies = [
 [[package]]
 name = "model"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "entity",
+ "serde",
+]
 
 [[package]]
 name = "moxcms"
@@ -4520,14 +4540,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "routes"
-version = "0.1.0"
-dependencies = [
- "serde",
- "services",
 ]
 
 [[package]]

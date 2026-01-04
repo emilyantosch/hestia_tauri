@@ -4,13 +4,13 @@ members = [
   "crates/entity",
   "crates/app",
   "crates/migration",
-  "crates/routes",
+  "crates/commands",
   "crates/repositories",
   "crates/services",
   "crates/controllers",
-  "crates/model",
   "crates/config",
   "crates/tests",
+  "crates/model",
 ]
 
 [profile]
@@ -81,10 +81,11 @@ num_cpus = "1.16"
 migration = { path = "crates/migration" }
 entity = { path = "crates/entity" }
 services = { path = "crates/services" }
-routes = { path = "crates/routes" }
+commands = { path = "crates/routes" }
 tests = { path = "crates/tests" }
 repositories = { path = "crates/repositories" }
 controllers = { path = "crates/controllers" }
+model = { path = "crates/model" }
 config = { path = "crates/config" }
 app = { path = "crates/app" }
 

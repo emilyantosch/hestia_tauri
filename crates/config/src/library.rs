@@ -6,17 +6,13 @@ use std::{
     io::{Read, Write},
     time::Duration,
 };
-use tracing::{error, info};
 
-use crate::{
-    errors::{FileError, LibraryError},
-    utils::{self, canon_path::CanonPath},
-};
+use model::services::decorations;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct Library {
-    pub share_path: Option<std::path::PathBuf>,
+    pub share_path: Option<PathBuf>,
     pub library_config: Option<LibraryConfig>,
 }
 
@@ -29,8 +25,8 @@ impl Drop for Library {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct LibraryConfig {
     pub name: String,
-    pub color: utils::decorations::Color,
-    pub icon: utils::decorations::Icon,
+    pub color: decorations::Color,
+    pub icon: decorations::Icon,
     pub library_paths: Vec<LibraryPathConfig>,
 }
 

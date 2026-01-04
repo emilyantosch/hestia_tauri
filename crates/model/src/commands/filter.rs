@@ -1,4 +1,4 @@
-use crate::model::tag::Tag;
+use crate::commands::tag::Tag;
 use std::path::PathBuf;
 
 #[derive(Debug)]

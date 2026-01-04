@@ -4,6 +4,10 @@ edition.workspace = true
 version.workspace = true
 
 [dependencies]
+serde = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+entity = { workspace = true }
 
 [lints]
 workspace = true

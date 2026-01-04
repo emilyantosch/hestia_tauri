@@ -1,4 +1,3 @@
-use crate::thumbnails::ThumbnailServiceError;
 use anyhow::{Context, Result};
 use chrono::Local;
 use entity::thumbnails;
