@@ -1,15 +1,14 @@
-use std::path::PathBuf;
-
-use crate::config::library::{LibraryConfig, LibraryPathConfig};
-use crate::errors::{AppError, FileError, LibraryError};
 use anyhow::{Context, Result};
+use errors::{AppError, FileError, LibraryError};
+use library::library::Library;
+use library::library::LibraryConfig;
+use library::library::LibraryPathConfig;
 use tempfile::TempDir;
 use tokio::sync::Notify;
 use tracing::info;
 
 #[test]
 fn check_delete_library() -> Result<()> {
-    use crate::config::library::Library;
     use tempfile::TempDir;
     use tracing::{error, info};
 
@@ -70,7 +69,6 @@ fn check_library_default_values() -> Result<()> {
 
 #[test]
 fn check_library_write_save_and_retrieve() -> Result<()> {
-    use crate::config::library::Library;
     println!("Start of test");
     info!("Start of test");
     let path = dirs::data_dir().ok_or_else(|| LibraryError::InvalidSharePath)?;

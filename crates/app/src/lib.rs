@@ -1,13 +1,8 @@
 mod state;
 
-use tokio::sync::Mutex;
+use anyhow::Result;
+use library::library::Library;
 
-use crate::file_system::{
-    DatabaseFileWatcherEventHandler, DirectoryScanner, FileWatcher, FileWatcherHandler,
-    FileWatcherMessage,
-};
-
-use state::AppState;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -29,130 +24,6 @@ fn init_tracing() {
         .init();
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    // Initialize tracing first
-    init_tracing();
-
-    tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
-        .setup(move |app| {
-            info!("Initializing Tauri application with unified AppState");
-
-            #[cfg(target_os = "linux")]
-            {
-                std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-                std::env::set_var("GTK_DEBUG", "interactive");
-            }
-
-            // Initialize unified app state asynchronously
-            let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-            let app_state = rt.block_on(async {
-                match AppState::new().await {
-                    Ok(state) => state,
-                    Err(e) => {
-                        error!("Failed to initialize AppState: {:?}", e);
-                        panic!("Cannot continue without proper app state initialization");
-                    }
-                }
-            });
-
-            info!("AppState initialized successfully");
-
-            // Manage the unified state
-            app.manage(Mutex::new(app_state));
-
-            info!("Unified AppState managed as application state");
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            // File operations
-            commands::file_operations::scan_directory,
-            commands::file_operations::get_file_by_path,
-            commands::file_operations::get_files_in_directory,
-            commands::file_operations::delete_file_by_path,
-            commands::file_operations::get_file_metadata,
-            commands::file_operations::file_exists_in_database,
-            // Tag management
-            commands::tag_management::create_tag,
-            commands::tag_management::get_all_tags,
-            commands::tag_management::get_tag_by_id,
-            commands::tag_management::get_tag_by_name,
-            commands::tag_management::update_tag,
-            commands::tag_management::delete_tag,
-            commands::tag_management::add_tag_to_file,
-            commands::tag_management::remove_tag_from_file,
-            commands::tag_management::get_tags_for_file,
-            commands::tag_management::get_files_for_tag,
-            commands::tag_management::get_all_file_tag_relationships,
-            commands::tag_management::search_tags_by_name,
-            // Database queries
-            commands::database_queries::search_files,
-            commands::database_queries::get_files_with_details,
-            commands::database_queries::get_database_stats,
-            commands::database_queries::search_files_by_tags,
-            commands::database_queries::find_duplicate_files,
-            commands::database_queries::get_untagged_files,
-            commands::database_queries::get_recent_files,
-            commands::database_queries::get_recently_updated_files,
-            // Folder management
-            commands::folder_management::get_all_folders,
-            commands::folder_management::get_folder_by_id,
-            commands::folder_management::get_folder_by_path,
-            commands::folder_management::get_root_folders,
-            commands::folder_management::get_subfolders,
-            commands::folder_management::get_files_in_folder,
-            commands::folder_management::get_folder_summary,
-            commands::folder_management::search_folders_by_name,
-            commands::folder_management::get_folder_path_hierarchy,
-            commands::folder_management::delete_empty_folders,
-            commands::folder_management::get_folder_statistics,
-            // Library management
-            commands::library_management::get_library_paths,
-            commands::library_management::select_library,
-            commands::library_management::create_new_library,
-            commands::library_management::list_available_library,
-            commands::library_management::initialize_library_workspace,
-            // Library management
-            commands::thumbnail_service::generate_missing_thumbnails_for_library,
-            //Utils
-            commands::util::check_health,
-            commands::util::select_folder,
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
-}
-
-use serde::Serialize;
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum AppError {
-    #[error("The file watcher could not be found!")]
-    WatcherNotFound,
-    #[error("An internal error has occurred: {0}")]
-    Internal(#[from] anyhow::Error),
-}
-
-#[derive(Serialize)]
-#[serde(tag = "kind", content = "message")]
-#[serde(rename_all = "camelCase")]
-enum AppErrorKind {
-    WatcherNotFound(String),
-    Internal(String),
-}
-
-impl Serialize for AppError {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let error_message = self.to_string();
-        let error_kind = match self {
-            Self::WatcherNotFound => AppErrorKind::WatcherNotFound(error_message),
-            Self::Internal(_) => AppErrorKind::Internal(error_message),
-        };
-        error_kind.serialize(serializer)
-    }
+pub(crate) fn falliable_main(library: Library) -> Result<()> {
+    Ok(())
 }

@@ -1,26 +1,12 @@
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
+use sea_orm::ConnectionTrait;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use tracing::{event, info, instrument};
+use std::sync::{Arc, RwLock};
 
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection,
-    DatabaseTransaction, DbErr, EntityOrSelect, EntityTrait, IntoActiveModel, QueryFilter,
-    QuerySelect, Set, TransactionTrait,
-};
-use tokio::sync::RwLock;
-
-use entity::{file_has_tags, file_system_identifier, file_types, files, folders, prelude::*};
-
-use crate::data::commands::watched_folders::WatchedFolderTree;
-
-use crate::data::file::File;
-use crate::data::filter::{Filter, FolderFilter, TagFilter};
-use crate::data::folder::Folder;
-use crate::database::{DatabaseManager, ThumbnailOperations};
-use crate::errors::DbError;
-use crate::file_system::{FileEvent, FileId, FolderEvent};
+use crate::manager::DatabaseManager;
+use crate::thumbnail::operations::ThumbnailOperations;
 
 /// Database file metadata for comparison
 #[derive(Debug, Clone)]
@@ -30,7 +16,7 @@ pub struct FileMetadata {
     pub content_hash: String,
     pub identity_hash: String,
     pub file_system_id: i32,
-    pub updated_at: chrono::NaiveDateTime,
+    pub updated_at: DateTime<Utc>,
 }
 
 /// File information for bulk operations
@@ -49,13 +35,13 @@ pub struct UpsertFolderBatchReport {
 
 /// Database operations for file management with caching and bulk operations
 #[derive(Debug)]
-pub struct FileOperations {
+pub struct FileRepository {
     database_manager: Arc<DatabaseManager>,
     file_type_cache: Arc<RwLock<HashMap<String, i32>>>,
     thumbnail_repository: ThumbnailOperations,
 }
 
-impl FileOperations {
+impl FileRepository {
     pub fn new(database_manager: Arc<DatabaseManager>) -> Self {
         let thumbnail_repository = ThumbnailOperations::new(Arc::clone(&database_manager));
 

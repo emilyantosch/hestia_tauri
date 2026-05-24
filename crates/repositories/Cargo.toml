@@ -1,17 +1,21 @@
 [package]
-name = "repositories"
 edition.workspace = true
+name = "repositories"
 version.workspace = true
 
 [dependencies]
-serde = { workspace = true }
-anyhow = { workspace = true }
-sea-orm = { workspace = true }
-thiserror = { workspace = true }
-argon2 = { workspace = true }
 aes-gcm = { workspace = true }
+anyhow = { workspace = true }
+argon2 = { workspace = true }
+chrono = { workspace = true }
+errors = { workspace = true }
+library = { workspace = true }
+sea-orm = { workspace = true }
 secrecy = { workspace = true }
-config = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
 
 [lints]
 workspace = true

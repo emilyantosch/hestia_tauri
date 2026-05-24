@@ -8,6 +8,10 @@ serde = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
 entity = { workspace = true }
+sea-orm = { workspace = true }
+image = { workspace = true }
+infer = { workspace = true }
+errors = { workspace = true }
 
 [lints]
 workspace = true

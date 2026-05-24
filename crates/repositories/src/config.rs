@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
-use std::path::{Path, PathBuf};
+use errors::database::DbError;
+use std::path::PathBuf;
 
 use aes_gcm::{Aes256Gcm, Key, KeyInit, Nonce, aead::Aead};
 
@@ -10,9 +11,6 @@ use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
 use sea_orm::sqlx::sqlite::{SqliteJournalMode, SqliteSynchronous};
-
-use crate::DbError;
-use config::{ConfigError, ConfigErrorKind};
 
 pub struct DatabaseSettings {
     pub db_type: DatabaseType,
@@ -135,9 +133,7 @@ impl PostgresConfig {
         if let Ok(config) = Self::from_env().await {
             return Ok(config);
         }
-        Err(ConfigError {
-            kind: ConfigErrorKind::NoCredentialsFound,
-        })
+        Err(ConfigError::NoCredentialsFound)
     }
 
     ///Load credentials using the most secure method available, depending on the operating system
@@ -157,9 +153,7 @@ impl PostgresConfig {
     async fn from_config_file(service: &str, master_password: &str) -> Result<Self, ConfigError> {
         let config_path = Self::get_config_file_path(service).await?;
         if !config_path.exists() {
-            return Err(ConfigError {
-                kind: ConfigErrorKind::NoCredentialsFound,
-            });
+            return Err(ConfigError::NoCredentialsFound);
         }
         Self::from_encrypted_file(&config_path, master_password).await
     }
@@ -213,11 +207,9 @@ impl PostgresConfig {
                 self.save_to_android_keystore(service, username).await?
             }
         }
-        Err(ConfigError {
-            kind: ConfigErrorKind::KeyringError(format!(
-                "Could not store config to secure storage"
-            )),
-        })
+        Err(ConfigError::KeyringError(
+            "Could not store config to secure storage".to_string(),
+        ))
     }
 
     #[cfg(any(
@@ -229,24 +221,21 @@ impl PostgresConfig {
     pub async fn from_keyring(service: &str, username: &str) -> Result<Self, ConfigError> {
         use keyring::Entry;
 
-        let entry = Entry::new(service, username).map_err(|e| ConfigError {
-            kind: ConfigErrorKind::KeyringError(format!("Failed to create keyring entry: {}", e)),
+        let entry = Entry::new(service, username).map_err(|e| {
+            ConfigError::KeyringError(format!("Failed to create keyring entry: {}", e))
         })?;
 
-        let stored_data = entry.get_password().map_err(|e| ConfigError {
-            kind: ConfigErrorKind::KeyringError(format!(
-                "Failed to get stored data: {}",
-                e.to_string()
-            )),
-        })?;
+        let stored_data = entry
+            .get_password()
+            .map_err(|e| ConfigError::KeyringError(format!("Failed to get stored data: {}", e)))?;
 
         if let Ok(config) = serde_json::from_str::<Self>(&stored_data) {
             return Ok(config);
         }
 
-        Err(ConfigError {
-            kind: ConfigErrorKind::KeyringError(format!("Could not extract values from keyring")),
-        })
+        Err(ConfigError::KeyringError(
+            "Could not extract values from keyring".to_string(),
+        ))
     }
 
     #[cfg(any(
@@ -258,17 +247,16 @@ impl PostgresConfig {
     async fn save_to_keyring(&self, service: &str, username: &str) -> Result<(), ConfigError> {
         use keyring::Entry;
 
-        let entry = Entry::new(service, username).map_err(|e| ConfigError {
-            kind: ConfigErrorKind::KeyringError(format!("Failed to create keyring entry: {}", e)),
+        let entry = Entry::new(service, username).map_err(|e| {
+            ConfigError::KeyringError(format!("Failed to create keyring entry: {}", e))
         })?;
 
         // Store full configuration as JSON
-        let config_json = serde_json::to_string(self).map_err(|e| ConfigError {
-            kind: ConfigErrorKind::SerializationError(e.to_string()),
-        })?;
+        let config_json = serde_json::to_string(self)
+            .map_err(|e| ConfigError::SerializationError(e.to_string()))?;
 
-        entry.set_password(&config_json).map_err(|e| ConfigError {
-            kind: ConfigErrorKind::KeyringError(format!("Failed to set configuration: {}", e)),
+        entry.set_password(&config_json).map_err(|e| {
+            ConfigError::KeyringError(format!("Failed to set configuration: {}", e))
         })?;
 
         Ok(())
@@ -355,33 +343,24 @@ impl PostgresConfig {
         path: &PathBuf,
         master_password: &str,
     ) -> Result<Self, ConfigError> {
-        let encrypted_data = tokio::fs::read(path).await.map_err(|e| ConfigError {
-            kind: ConfigErrorKind::IoError(e),
-        })?;
+        let encrypted_data = tokio::fs::read(path).await?;
 
-        let encrypted_config: EncryptedConfig =
-            serde_json::from_slice(&encrypted_data).map_err(|e| ConfigError {
-                kind: ConfigErrorKind::SerializationError(e.to_string()),
-            })?;
+        let encrypted_config: EncryptedConfig = serde_json::from_slice(&encrypted_data)
+            .map_err(|e| ConfigError::SerializationError(e.to_string()))?;
 
         let argon2 = Argon2::default();
 
-        let salt = SaltString::from_b64(&String::from_utf8_lossy(&encrypted_config.salt)).map_err(
-            |e| ConfigError {
-                kind: ConfigErrorKind::EncryptionError(format!("Invalid Salt: {}", e.to_string())),
-            },
-        )?;
+        let salt = SaltString::from_b64(&String::from_utf8_lossy(&encrypted_config.salt))
+            .map_err(|e| ConfigError::EncryptionError(format!("Invalid Salt: {}", e)))?;
 
         let mut key_bytes = [0u8; 32];
         let mut salt_buffer = Vec::new();
-        let salt_bytes = salt.decode_b64(&mut salt_buffer).map_err(|e| ConfigError {
-            kind: ConfigErrorKind::EncryptionError(e.to_string()),
-        })?;
+        let salt_bytes = salt
+            .decode_b64(&mut salt_buffer)
+            .map_err(|e| ConfigError::EncryptionError(e.to_string()))?;
         argon2
             .hash_password_into(master_password.as_bytes(), salt_bytes, &mut key_bytes)
-            .map_err(|e| ConfigError {
-                kind: ConfigErrorKind::EncryptionError(e.to_string()),
-            })?;
+            .map_err(|e| ConfigError::EncryptionError(e.to_string()))?;
 
         let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
         let cipher = Aes256Gcm::new(key);
@@ -389,17 +368,11 @@ impl PostgresConfig {
         let nonce = Nonce::from_slice(&encrypted_config.nonce);
         let decrypted_data = cipher
             .decrypt(nonce, encrypted_config.encrypted_data.as_ref())
-            .map_err(|e| ConfigError {
-                kind: ConfigErrorKind::SerializationError(e.to_string()),
-            })?;
+            .map_err(|e| ConfigError::EncryptionError(format!("Decryption failed: {}", e)))?;
 
-        let mut config: PostgresConfig =
-            serde_json::from_slice(&decrypted_data).map_err(|e| ConfigError {
-                kind: ConfigErrorKind::SerializationError(format!(
-                    "Deserialization into JSON failed: {}",
-                    e.to_string()
-                )),
-            })?;
+        let mut config: PostgresConfig = serde_json::from_slice(&decrypted_data).map_err(|e| {
+            ConfigError::SerializationError(format!("Deserialization into JSON failed: {}", e))
+        })?;
 
         if let Ok(password_str) = serde_json::from_slice::<String>(&decrypted_data) {
             config.password = SecretString::new(password_str.into());
@@ -418,17 +391,12 @@ impl PostgresConfig {
 
         // Create config directory if it doesn't exist
         if let Some(parent) = config_path.parent() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .map_err(|e| ConfigError {
-                    kind: ConfigErrorKind::IoError(e),
-                })?;
+            tokio::fs::create_dir_all(parent).await?;
         }
 
         // Generate random salt and nonce
-        let salt = SaltString::try_from_rng(&mut rand::rngs::OsRng).map_err(|e| ConfigError {
-            kind: ConfigErrorKind::EncryptionError(e.to_string()),
-        })?;
+        let salt = SaltString::try_from_rng(&mut rand::rngs::OsRng)
+            .map_err(|e| ConfigError::EncryptionError(e.to_string()))?;
 
         let nonce_bytes: [u8; 12] = rand::random();
         let nonce = Nonce::from_slice(&nonce_bytes);
@@ -437,30 +405,24 @@ impl PostgresConfig {
         let argon2 = Argon2::default();
         let mut key_bytes = [0u8; 32];
         let mut salt_buffer = Vec::new();
-        let salt_bytes = salt.decode_b64(&mut salt_buffer).map_err(|e| ConfigError {
-            kind: ConfigErrorKind::EncryptionError(e.to_string()),
-        })?;
+        let salt_bytes = salt
+            .decode_b64(&mut salt_buffer)
+            .map_err(|e| ConfigError::EncryptionError(e.to_string()))?;
         argon2
             .hash_password_into(master_password.as_bytes(), salt_bytes, &mut key_bytes)
-            .map_err(|e| ConfigError {
-                kind: ConfigErrorKind::EncryptionError(format!("Key derivation failed: {}", e)),
-            })?;
+            .map_err(|e| ConfigError::EncryptionError(format!("Key derivation failed: {}", e)))?;
 
         let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
         let cipher = Aes256Gcm::new(key);
 
         // Serialize config (excluding password for now, we'll handle it separately)
-        let config_data = serde_json::to_vec(&self).map_err(|e| ConfigError {
-            kind: ConfigErrorKind::SerializationError(e.to_string()),
-        })?;
+        let config_data = serde_json::to_vec(&self)
+            .map_err(|e| ConfigError::SerializationError(e.to_string()))?;
 
         // Encrypt the data
-        let encrypted_data =
-            cipher
-                .encrypt(nonce, config_data.as_ref())
-                .map_err(|e| ConfigError {
-                    kind: ConfigErrorKind::EncryptionError(format!("Encryption failed: {}", e)),
-                })?;
+        let encrypted_data = cipher
+            .encrypt(nonce, config_data.as_ref())
+            .map_err(|e| ConfigError::EncryptionError(format!("Encryption failed: {}", e)))?;
 
         // Create encrypted config structure
         let encrypted_config = EncryptedConfig {
@@ -470,16 +432,10 @@ impl PostgresConfig {
         };
 
         // Save to file
-        let encrypted_json =
-            serde_json::to_vec_pretty(&encrypted_config).map_err(|e| ConfigError {
-                kind: ConfigErrorKind::SerializationError(e.to_string()),
-            })?;
+        let encrypted_json = serde_json::to_vec_pretty(&encrypted_config)
+            .map_err(|e| ConfigError::SerializationError(e.to_string()))?;
 
-        tokio::fs::write(&config_path, encrypted_json)
-            .await
-            .map_err(|e| ConfigError {
-                kind: ConfigErrorKind::IoError(e),
-            })?;
+        tokio::fs::write(&config_path, encrypted_json).await?;
 
         Ok(())
     }
@@ -521,7 +477,7 @@ impl Default for PostgresConfig {
             max_connections: 10,
             min_connections: 1,
             acquire_timeout_ms: 5000,
-            idle_timeout_ms: Some(600000), // 10 minutes
+            idle_timeout_ms: Some(600_000), // 10 minutes
         }
     }
 }

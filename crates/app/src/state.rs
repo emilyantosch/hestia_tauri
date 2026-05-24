@@ -1,18 +1,7 @@
 use anyhow::{Context, Result};
+use library::library::Library;
 use std::{collections::HashMap, sync::Arc};
 use tracing::{error, info};
-
-use crate::{
-    config::library::Library,
-    data::{thumbnails::ThumbnailGenerator, watched_folders::WatchedFolderTree},
-    database::{thumbnail_repository, DatabaseManager, FileOperations, ThumbnailOperations},
-    errors::{DbError, LibraryError, ScannerError},
-    file_system::{
-        DatabaseFileWatcherEventHandler, DirectoryScanner, FileWatcher, FileWatcherHandler,
-        ThumbnailProcessor, ThumbnailProcessorHandler,
-    },
-    utils::canon_path::CanonPath,
-};
 
 use migration::{Migrator, MigratorTrait};
 
@@ -20,8 +9,7 @@ use migration::{Migrator, MigratorTrait};
 #[derive(Debug)]
 pub struct AppState {
     pub library: Library,
-    pub database_manager: Arc<DatabaseManager>,
-    pub file_operations: FileOperations,
+    pub file_operations: FileRepository,
     pub directory_scanner: DirectoryScanner,
     pub file_watcher_handler: Option<FileWatcherHandler>,
     pub thumbnail_processor_handler: Option<ThumbnailProcessorHandler>,
@@ -46,7 +34,6 @@ impl AppState {
 
         Ok(Self {
             library,
-            database_manager,
             file_operations,
             directory_scanner,
             file_watcher_handler: None,
@@ -273,44 +260,5 @@ impl AppState {
             }
         });
         Ok(())
-    }
-}
-
-use serde::Serialize;
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum StateError {
-    #[error("The file watcher could not be found!")]
-    WatcherNotFound,
-    #[error("The thumbnail message handler could not be found!")]
-    ThumbnailMessageHandlerNotFound,
-    #[error("An internal error has occurred: {0}")]
-    Internal(#[from] anyhow::Error),
-}
-
-#[derive(Serialize)]
-#[serde(tag = "kind", content = "message")]
-#[serde(rename_all = "camelCase")]
-enum StateErrorKind {
-    WatcherNotFound(String),
-    ThumbnailMessageHandlerNotFound(String),
-    Internal(String),
-}
-
-impl Serialize for StateError {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let error_message = self.to_string();
-        let error_kind = match self {
-            Self::WatcherNotFound => StateErrorKind::WatcherNotFound(error_message),
-            Self::ThumbnailMessageHandlerNotFound => {
-                StateErrorKind::ThumbnailMessageHandlerNotFound(error_message)
-            }
-            Self::Internal(_) => StateErrorKind::Internal(error_message),
-        };
-        error_kind.serialize(serializer)
     }
 }

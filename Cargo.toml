@@ -8,9 +8,12 @@ members = [
   "crates/repositories",
   "crates/services",
   "crates/controllers",
-  "crates/config",
   "crates/tests",
   "crates/model",
+  "crates/errors",
+  "crates/errors-derive",
+  "crates/library",
+  "crates/io",
 ]
 
 [profile]
@@ -40,9 +43,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "*", features = ["full"] }
 notify = "8.0.0"
-notify-debouncer-full = "0.5.0"
+notify-debouncer-full = "0.6.0"
 gtk = "0.18.2"
-rfd = { version = "*", default-features = false, features = ["tokio"] }
+rfd = { version = "*", default-features = false, features = [] }
 sea-orm = { version = "1.1.10", features = [
   "sqlx-sqlite",
   "runtime-tokio-rustls",
@@ -75,8 +78,12 @@ image = { version = "0.25", default-features = false, features = [
   "bmp",
   "tiff",
 ] }
-infer = "0.16"
-num_cpus = "1.16"
+infer = "0.19.0"
+num_cpus = "1.17.0"
+syn = { version = "2", features = ["full", "parsing", "derive"] }
+quote = "1"
+proc-macro2 = "1"
+convert_case = "0.6"
 
 migration = { path = "crates/migration" }
 entity = { path = "crates/entity" }
@@ -86,8 +93,11 @@ tests = { path = "crates/tests" }
 repositories = { path = "crates/repositories" }
 controllers = { path = "crates/controllers" }
 model = { path = "crates/model" }
-config = { path = "crates/config" }
 app = { path = "crates/app" }
+errors = { path = "crates/errors" }
+errors-derive = { path = "crates/errors-derive" }
+io = { path = "crates/io" }
+library = { path = "crates/library" }
 
 [workspace.lints.rust]
 future_incompatible = { level = "deny", priority = -1 }

@@ -1,0 +1,16 @@
+exclude = [ "**/node_modules/**", "target/**" ]
+include = [ "**/*.toml" ]
+
+[formatting]
+# Don't add a trailing comma to arrays
+array_trailing_comma = true
+# Don't introduce a line break
+array_auto_expand = false
+# Don't remove the surrounding array whitelines
+compact_arrays = false
+# Reorder keys (alpha)
+reorder_keys = true
+# Reorder Arrays (alpha)
+reorder_arrays = true
+# Reorder tables (alpha)
+reorder_inline_tables = true
