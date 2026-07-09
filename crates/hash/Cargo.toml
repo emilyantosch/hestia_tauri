@@ -1,15 +1,13 @@
 [package]
 edition.workspace = true
-name = "services"
+name = "hash"
 version.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-chrono = { workspace = true }
-entity = { workspace = true }
-events = { workspace = true }
-image = { workspace = true }
-repositories = { workspace = true }
+async-recursion = { workspace = true }
+blake3 = { workspace = true }
+errors = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

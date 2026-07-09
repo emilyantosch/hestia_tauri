@@ -1,9 +1,19 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use sea_orm::ConnectionTrait;
+use entity::prelude::FileTypes;
+use entity::{file_has_tags, file_system_identifier, file_types};
+use entity::{files, prelude::Files};
+use entity::{folders, prelude::Folders};
+use errors::database::DbError;
+use sea_orm::ActiveValue::Set;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, IntoActiveModel,
+    QueryFilter, TransactionTrait,
+};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+use tracing::instrument;
 
 use crate::manager::DatabaseManager;
 use crate::thumbnail::operations::ThumbnailOperations;
@@ -94,7 +104,7 @@ impl FileRepository {
     pub async fn upsert_root_folders(&self, library_paths: Vec<PathBuf>) -> Result<()> {
         let connection = self.database_manager.get_connection();
         let transaction = connection.begin().await?;
-        info!("All library_paths are {library_paths:#?}");
+        tracing::info!("All library_paths are {library_paths:#?}");
 
         for path in library_paths {
             match self._upsert_root_folders(&transaction, path).await {
@@ -106,7 +116,7 @@ impl FileRepository {
             };
         }
         transaction.commit().await?;
-        info!("Transaction committed");
+        tracing::info!("Transaction committed");
         Ok(())
     }
 
@@ -120,11 +130,11 @@ impl FileRepository {
             .one(transaction)
             .await?;
         let folder_info = Folder::create_folder_info(&path).await?;
-        info!("Got folder info {folder_info:#?} for root folder {path:#?}");
+        tracing::info!("Got folder info {folder_info:#?} for root folder {path:#?}");
         let file_system_id = self
             .get_or_create_file_system_identifier(&path, transaction)
             .await?;
-        info!("Got file system id {file_system_id:#?} for root folder {path:#?}");
+        tracing::info!("Got file system id {file_system_id:#?} for root folder {path:#?}");
         match possible_root_folder {
             Some(rf) => {
                 let mut active_rf = rf.into_active_model();
@@ -135,7 +145,7 @@ impl FileRepository {
                 active_rf.identity_hash = Set(folder_info.identity_hash);
                 active_rf.structure_hash = Set(folder_info.structure_hash);
 
-                info!("Updating existing root folder {path:#?}");
+                tracing::info!("Updating existing root folder {path:#?}");
                 active_rf.update(transaction).await?;
             }
             None => {
@@ -152,9 +162,9 @@ impl FileRepository {
                     updated_at: Set(chrono::Local::now().naive_local()),
                 };
 
-                info!("Inserting existing root folder {path:#?}");
+                tracing::info!("Inserting existing root folder {path:#?}");
                 new_folder.insert(transaction).await?;
-                info!("Insert of {path:#?} complete!");
+                tracing::info!("Insert of {path:#?} complete!");
             }
         }
         Ok(())
@@ -362,7 +372,7 @@ impl FileRepository {
 
     /// Delete a file record from the database
     pub async fn delete_file_by_path(&self, file_path: &Path) -> Result<bool> {
-        info!("FileOperations: Deleting path {file_path:#?} from database");
+        tracing::info!("FileOperations: Deleting path {file_path:#?} from database");
         let path_str = file_path.to_string_lossy().to_string();
         let connection = self.database_manager.get_connection();
 
@@ -520,7 +530,7 @@ impl FileRepository {
                 content_hash: file.content_hash,
                 identity_hash: file.identity_hash,
                 file_system_id: file.file_system_id,
-                updated_at: file.updated_at,
+                updated_at: file.updated_at.and_utc(),
             };
             state.insert(PathBuf::from(file.path), metadata);
         }
@@ -568,7 +578,7 @@ impl FileRepository {
             None,
         );
         map.insert("0".to_string(), root);
-        info!("First map value inserted {map:#?}");
+        tracing::info!("First map value inserted {map:#?}");
 
         for folder in with_parent {
             let children = Folders::find()
@@ -785,7 +795,7 @@ impl FileRepository {
 
     /// Clear file type cache (useful for testing or cache invalidation)
     pub async fn clear_file_type_cache(&self) {
-        let mut cache = self.file_type_cache.write().await;
+        let mut cache = self.file_type_cache.write()?;
         cache.clear();
     }
 
@@ -800,7 +810,7 @@ impl FileRepository {
     {
         // Check cache first
         {
-            let cache = self.file_type_cache.read().await;
+            let cache = self.file_type_cache.read()?;
             if let Some(&type_id) = cache.get(file_type_name) {
                 return Ok(type_id);
             }
@@ -813,7 +823,7 @@ impl FileRepository {
 
         // Update cache
         {
-            let mut cache = self.file_type_cache.write().await;
+            let mut cache = self.file_type_cache.write()?;
             cache.insert(file_type_name.to_string(), type_id);
         }
 

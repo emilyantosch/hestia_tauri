@@ -72,22 +72,6 @@ impl FileWatcherEventHandler for TestFileWatcherEventHandler {
     }
 }
 
-#[derive(Debug)]
-pub struct FileEvent {
-    pub event: DebouncedEvent,
-    pub paths: Vec<PathBuf>,
-    pub kind: EventKind,
-    pub hash: Option<FileHash>,
-}
-
-#[derive(Debug)]
-pub struct FolderEvent {
-    pub event: DebouncedEvent,
-    pub paths: Vec<PathBuf>,
-    pub kind: EventKind,
-    pub hash: Option<FolderHash>,
-}
-
 type RawEventReceiver = Option<
     Arc<Mutex<tokio::sync::mpsc::Receiver<std::result::Result<Vec<DebouncedEvent>, Vec<Error>>>>>,
 >;

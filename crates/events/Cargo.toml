@@ -1,19 +1,17 @@
 [package]
 edition.workspace = true
-name = "services"
+name = "events"
 version.workspace = true
 
 [dependencies]
+hash = { workspace = true }
+
 anyhow = { workspace = true }
 chrono = { workspace = true }
-entity = { workspace = true }
-events = { workspace = true }
-image = { workspace = true }
-repositories = { workspace = true }
+notify = { workspace = true }
+notify-debouncer-full = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-tracing = { workspace = true }
-
 [lints]
 workspace = true

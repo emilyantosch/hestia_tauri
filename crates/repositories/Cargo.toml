@@ -8,6 +8,7 @@ aes-gcm = { workspace = true }
 anyhow = { workspace = true }
 argon2 = { workspace = true }
 chrono = { workspace = true }
+entity = { workspace = true }
 errors = { workspace = true }
 library = { workspace = true }
 sea-orm = { workspace = true }
