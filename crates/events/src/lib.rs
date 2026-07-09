@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use hash::hash::{FileHash, FolderHash};
 use notify::EventKind;
 use notify_debouncer_full::DebouncedEvent;
 
