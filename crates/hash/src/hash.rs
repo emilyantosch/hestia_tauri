@@ -3,9 +3,8 @@ use blake3::{Hash as Blake3Hash, Hasher};
 use std::collections::BTreeMap;
 use std::path::Path;
 use tokio::fs as async_fs;
-use tracing::info;
 
-use anyhow::{Context, Result};
+use anyhow::{Result, bail};
 
 use crate::file_id::FileId;
 
@@ -26,17 +25,16 @@ pub struct FolderHash {
 
 impl FileHash {
     pub async fn hash(path: &Path) -> Result<FileHash> {
-        info!("Trying to extract file id for {path:#?}");
+        tracing::info!("Trying to extract file id for {path:#?}");
         let file_id = FileId::extract(path).await?;
 
         let content_hash = Self::hash_file_content(path).await?;
 
-        let file_name = match path.file_name().and_then(|n| n.to_str()) {
-            Some(file_name) => file_name,
-            None => return Err(HashError::InvalidPathError)?,
+        let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
+            bail!("Tried to hash invalid path and could not find file name");
         };
 
-        let identity_hash = Self::hash_identity(&content_hash, &file_id, file_name).await?;
+        let identity_hash = Self::hash_identity(&content_hash, &file_id, file_name)?;
 
         Ok(FileHash {
             content_hash,
@@ -49,16 +47,15 @@ impl FileHash {
     where
         T: AsRef<Path> + std::fmt::Debug + Clone,
     {
-        let content = match async_fs::read(path.clone()).await {
-            Ok(content) => content,
-            Err(e) => return Err(HashError::IoError)?,
-        };
         let mut hasher = Hasher::new();
+        let Ok(content) = async_fs::read(path.clone()).await else {
+            bail!("Could not read path to hash");
+        };
         hasher.update(&content);
         Ok(hasher.finalize())
     }
 
-    pub async fn hash_identity(
+    pub fn hash_identity(
         content_hash: &Blake3Hash,
         file_id: &FileId,
         file_name: &str,
@@ -96,13 +93,12 @@ impl FolderHash {
 
         let (structure_hash, content_hash) = Self::_hash_folder(path).await?;
 
-        let folder_name = match path.file_name().and_then(|n| n.to_str()) {
-            Some(folder_name) => folder_name,
-            None => return Err(HashError::InvalidPathError)?,
+        let Some(folder_name) = path.file_name().and_then(|n| n.to_str()) else {
+            bail!("Could not find folder name to hash");
         };
 
         let identity_hash =
-            Self::hash_identity(&structure_hash, &content_hash, &file_id, folder_name).await?;
+            Self::hash_identity(&structure_hash, &content_hash, &file_id, folder_name);
 
         Ok(FolderHash {
             structure_hash,
@@ -135,25 +131,25 @@ impl FolderHash {
         }
 
         // Hash the immediate structure of the directory
-        let structure_hash = Self::hash_structure(&children).await?;
+        let structure_hash = Self::hash_structure(&children);
 
         // Hash the content of that directory
-        let content_hash = Self::hash_content(&mut all_content_hashes).await?;
+        let content_hash = Self::hash_content(&mut all_content_hashes);
 
         Ok((structure_hash, content_hash))
     }
 
-    async fn hash_structure(children: &BTreeMap<String, (bool, Blake3Hash)>) -> Result<Blake3Hash> {
+    fn hash_structure(children: &BTreeMap<String, (bool, Blake3Hash)>) -> Blake3Hash {
         let mut hasher = Hasher::new();
 
         for (name, (is_dir, _)) in children {
             hasher.update(name.as_bytes());
-            hasher.update(&[if *is_dir { 1u8 } else { 0u8 }]);
+            hasher.update(&[(*is_dir).into()]);
         }
-        Ok(hasher.finalize())
+        hasher.finalize()
     }
 
-    async fn hash_content(content_hashes: &mut [Blake3Hash]) -> Result<Blake3Hash> {
+    fn hash_content(content_hashes: &mut [Blake3Hash]) -> Blake3Hash {
         let mut hasher = Hasher::new();
 
         content_hashes.sort_by(|a, b| a.as_bytes().cmp(b.as_bytes()));
@@ -161,15 +157,15 @@ impl FolderHash {
             hasher.update(hash.as_bytes());
         }
 
-        Ok(hasher.finalize())
+        hasher.finalize()
     }
 
-    async fn hash_identity(
+    fn hash_identity(
         structure_hash: &Blake3Hash,
         content_hash: &Blake3Hash,
         file_id: &FileId,
         folder_name: &str,
-    ) -> Result<Blake3Hash> {
+    ) -> Blake3Hash {
         let mut hasher = Hasher::new();
 
         hasher.update(structure_hash.as_bytes());
@@ -193,6 +189,6 @@ impl FolderHash {
         }
         hasher.update(folder_name.as_bytes());
 
-        Ok(hasher.finalize())
+        hasher.finalize()
     }
 }
