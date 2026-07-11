@@ -28,7 +28,6 @@ import {
   RiAddLine,
   RiFilter3Line,
   RiStarLine,
-  RiSearchLine,
 } from "@remixicon/react";
 
 // This is sample data.

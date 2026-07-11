@@ -1,0 +1,26 @@
+[package]
+edition.workspace = true
+name = "services"
+version.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+async-recursion = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+entity = { workspace = true }
+events = { workspace = true }
+hash = { workspace = true }
+image = { workspace = true }
+infer = { workspace = true }
+model = { workspace = true }
+notify = { workspace = true }
+notify-debouncer-full = { workspace = true }
+num_cpus = { workspace = true }
+repositories = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true

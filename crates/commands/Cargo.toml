@@ -1,0 +1,11 @@
+[package]
+name = "commands"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+services = { workspace = true }
+
+[lints]
+workspace = true

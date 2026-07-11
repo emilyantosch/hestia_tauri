@@ -1,0 +1,17 @@
+[package]
+name = "model"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+entity = { workspace = true }
+hash = { workspace = true }
+sea-orm = { workspace = true }
+image = { workspace = true }
+infer = { workspace = true }
+
+[lints]
+workspace = true

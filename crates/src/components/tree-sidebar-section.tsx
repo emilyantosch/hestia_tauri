@@ -26,53 +26,10 @@ interface WatchedFolder {
 enum folderId {
   rootFolderId = "0",
 }
-// Mock data - this will come from the backend via Tauri
-const watchedFolders: Record<string, WatchedFolder> = {
-  "0": {
-    name: "Library",
-    path: "",
-    children: ["1", "4"],
-  },
-  "1": {
-    name: "Projects",
-    path: "/home/user/Documents/Projects",
-    children: ["2", "3"],
-  },
-  "2": {
-    name: "Hestia",
-    path: "/home/user/Documents/Projects/hestia",
-    children: ["5"],
-  },
-  "3": {
-    name: "Portfolio",
-    path: "/home/user/Documents/Projects/portfolio",
-    children: [],
-  },
-  "4": {
-    name: "Notes",
-    path: "/home/user/Documents/Notes",
-    children: [],
-  },
-  "5": {
-    name: "Downloads",
-    path: "/home/user/Downloads",
-    children: ["6", "7"],
-  },
-  "6": {
-    name: "Images",
-    path: "/home/user/Downloads/Images",
-    children: [],
-  },
-  "7": {
-    name: "Videos",
-    path: "/home/user/Downloads/Videos",
-  },
-}
-
 const indent = 12
 
 export function WatchedFoldersTree() {
-  const { isPending, error, data, refetch } = useQuery({
+  const { isPending, error, data } = useQuery({
     queryKey: ['watched_folder_tree'],
     queryFn: () => invoke('get_watched_folders'),
     retry: true

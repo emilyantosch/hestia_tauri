@@ -34,5 +34,4 @@ app/target
 .aider*
 .env
 
-# LEANN RAG Indexes are not needed for every device and can be rebuilt easily
-.leann/*
+dev_ai/**

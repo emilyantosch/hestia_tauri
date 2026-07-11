@@ -1,6 +1,6 @@
 [workspace]
+members = [ "crates/app", "crates/commands", "crates/controllers", "crates/entity", "crates/events", "crates/hash", "crates/io", "crates/library", "crates/migration", "crates/model", "crates/repositories", "crates/services", "crates/tests" ]
 resolver = "3"
-members = ["crates/entity", "crates/app", "crates/migration"]
 
 [profile]
 
@@ -21,53 +21,52 @@ version = "0.1.0"
 
 [workspace.dependencies]
 
-argon2 = { version = "0.6.0-rc.0", features = [] }
-password-hash = { version = "0.6.0-rc.1", features = ["rand_core"] }
-tauri = { version = "2", features = ["webkit2gtk"] }
-tauri-plugin-opener = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "*", features = ["full"] }
-notify = "8.0.0"
-notify-debouncer-full = "0.5.0"
-gtk = "0.18.2"
-rfd = { version = "*", default-features = false, features = ["tokio"] }
-entity = { path = "crates/entity" }
-sea-orm = { version = "1.1.10", features = [
-  "sqlx-sqlite",
-  "runtime-tokio-rustls",
-  "macros",
-  "chrono",
-] }
-anyhow = { version = "1.0.98" }
-thiserror = "2.0.12"
-tempfile = "3.20.0"
-blake3 = "1.8.2"
-async-recursion = "1.1.1"
-async-std = { version = "*", features = ["attributes", "tokio1"] }
-secrecy = "0.10.3"
-cfg-if = "1.0.1"
-keyring = "3.6.2"
-toml = "0.8.23"
-dirs = "6.0.0"
 aes-gcm = "0.10.3"
-rand = "0.9.1"
-chrono = { version = "0.4", features = ["serde"] }
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+anyhow = { version = "1.0.98" }
+argon2 = { features = [  ], version = "0.6.0-rc.0" }
+async-recursion = "1.1.1"
+async-std = { features = [ "attributes", "tokio1" ], version = "*" }
 async-trait = "0.1.89"
+blake3 = "1.8.2"
+cfg-if = "1.0.1"
+chrono = { features = [ "serde" ], version = "0.4" }
+dirs = "6.0.0"
+gtk = "0.18.2"
+image = { default-features = false, features = [ "bmp", "gif", "jpeg", "png", "tiff", "webp" ], version = "0.25" }
+infer = "0.19.0"
+keyring = "3.6.2"
+notify = "8.0.0"
+notify-debouncer-full = "0.6.0"
+num_cpus = "1.17.0"
+password-hash = { features = [ "rand_core" ], version = "0.6.0-rc.1" }
+rand = "0.9.1"
+rfd = { default-features = false, features = [  ], version = "*" }
+sea-orm = { features = [ "chrono", "macros", "runtime-tokio-rustls", "sqlx-sqlite" ], version = "1.1.10" }
+secrecy = "0.10.3"
+serde = { features = [ "derive" ], version = "1" }
+serde_json = "1"
+tauri = { features = [ "webkit2gtk" ], version = "2" }
 tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tempfile = "3.20.0"
+tokio = { features = [ "full" ], version = "*" }
+toml = "0.8.23"
+tracing = "0.1.41"
+tracing-subscriber = { features = [ "env-filter" ], version = "0.3.19" }
+
+app = { path = "crates/app" }
+commands = { path = "crates/commands" }
+controllers = { path = "crates/controllers" }
+entity = { path = "crates/entity" }
+events = { path = "crates/events" }
+hash = { path = "crates/hash" }
+io = { path = "crates/io" }
+library = { path = "crates/library" }
 migration = { path = "crates/migration" }
-image = { version = "0.25", default-features = false, features = [
-  "png",
-  "jpeg",
-  "gif",
-  "webp",
-  "bmp",
-  "tiff",
-] }
-infer = "0.16"
-num_cpus = "1.16"
+model = { path = "crates/model" }
+repositories = { path = "crates/repositories" }
+services = { path = "crates/services" }
+tests = { path = "crates/tests" }
 
 [workspace.lints.rust]
 future_incompatible = { level = "deny", priority = -1 }
@@ -89,8 +88,8 @@ unused_import_braces = "warn"
 unused_lifetimes = "warn"
 unused_qualifications = "warn"
 
-unused_crate_dependencies = "allow" # too many false positives
 single_use_lifetimes = "allow"      # too many false positives because of anonymous lifetimes in trait being unstable
+unused_crate_dependencies = "allow" # too many false positives
 
 [workspace.lints.rustdoc]
 broken_intra_doc_links = "warn"
@@ -99,10 +98,10 @@ private_intra_doc_links = "allow"
 [workspace.lints.clippy]
 complexity = { level = "warn", priority = -1 }
 correctness = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
 perf = { level = "warn", priority = -1 }
 style = { level = "warn", priority = -1 }
 suspicious = { level = "deny", priority = -1 }
-pedantic = { level = "warn", priority = -1 }
 
 # # restrictions
 allow_attributes = "deny"
@@ -118,12 +117,12 @@ unreachable = "warn"
 unwrap_used = "warn"
 
 # allowed pedantic
-cast_precision_loss = "allow"
 cast_possible_truncation = "allow"
 cast_possible_wrap = "allow"
+cast_precision_loss = "allow"
 cast_sign_loss = "allow"
+items_after_statements = "allow"   # used in table tests
+large_enum_variant = "allow"
 manual_string_new = "allow"        # allows `"".to_string()`
 missing_errors_doc = "allow"       # might be nice but this would force us to write docs even if we don't think it's necessary
 missing_panics_doc = "allow"
-items_after_statements = "allow"   # used in table tests
-large_enum_variant = "allow"

@@ -1,0 +1,15 @@
+[package]
+name = "tests"
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+library = { workspace = true }
+tracing = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+dirs = { workspace = true }
+
+[lints]
+workspace = true

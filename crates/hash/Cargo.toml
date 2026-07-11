@@ -1,0 +1,15 @@
+[package]
+edition.workspace = true
+name = "hash"
+version.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+async-recursion = { workspace = true }
+blake3 = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true

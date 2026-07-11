@@ -1,19 +1,9 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+// Prevents an additional console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod commands;
-mod config;
-mod data;
-mod database;
-mod errors;
-mod file_system;
-mod utils;
-use crate::AppError;
-use std::path::PathBuf;
+use anyhow::Result;
+use library::library::Library;
 
-use crate::errors::*;
-use crate::file_system::FileWatcher;
-
-fn main() {
-    hestia_tauri_lib::run()
+fn main() -> Result<()> {
+    hestia_tauri_lib::falliable_main(Library::last_or_new())
 }
