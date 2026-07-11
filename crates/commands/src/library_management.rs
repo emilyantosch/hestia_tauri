@@ -7,7 +7,6 @@ use tracing::info;
 
 use crate::config::app::AppState;
 use crate::config::library::{Library, LibraryConfig, LibraryPathConfig};
-use crate::errors::{AppError, LibraryError, WatcherError};
 use crate::file_system::FileWatcherMessage;
 use crate::utils;
 use anyhow::{Context, Result};
@@ -26,9 +25,9 @@ pub async fn get_library_paths(
 
 ///This IPC endpoint lists all libraries in the datahome directory
 #[tauri::command]
-pub async fn list_available_library() -> Result<Vec<String>, LibraryError> {
+pub async fn list_available_library() -> Result<Vec<String>, String> {
     info!("Trying to fetch list of libraries");
-    let library_list = Library::list_libraries()?;
+    let library_list = Library::list_libraries().map_err(|error| format!("{error:#}"))?;
     info!("Library List is {library_list:#?}");
     Ok(library_list)
 }
@@ -37,19 +36,24 @@ pub async fn list_available_library() -> Result<Vec<String>, LibraryError> {
 pub async fn select_library(
     path: String,
     app_state: State<'_, Mutex<AppState>>,
-) -> Result<String, LibraryError> {
+) -> Result<String, String> {
     let library_path = PathBuf::from(&path);
 
     if !library_path.exists() || !library_path.is_dir() {
-        return Err(LibraryError::InvalidSharePath)?;
+        return Err(format!("invalid library path: {}", library_path.display()));
     }
 
     // Create the new library and switch to it
-    let new_library = Library::new().switch_or_create_lib(&library_path)?;
+    let new_library = Library::new()
+        .switch_or_create_lib(&library_path)
+        .map_err(|error| format!("{error:#}"))?;
 
     {
         let mut state = app_state.lock().await;
-        state.switch_library(new_library).await?;
+        state
+            .switch_library(new_library)
+            .await
+            .map_err(|error| format!("{error:#}"))?;
     }
 
     Ok(path)
@@ -62,22 +66,28 @@ pub async fn create_new_library(
     app_state: State<'_, Mutex<AppState>>,
     name: String,
     path: String,
-) -> Result<String, LibraryError> {
+) -> Result<String, String> {
     //Extract the share path from the name of the library
     info!("Trying to create new library!");
-    let share_path = Library::create_or_validate_data_directory()?
+    let share_path = Library::create_or_validate_data_directory()
+        .map_err(|error| format!("{error:#}"))?
         .join("hestia")
         .join(&name);
 
     match std::fs::exists(&share_path) {
-        Ok(true) => return Err(LibraryError::InvalidSharePath),
+        Ok(true) => return Err(format!("library already exists: {}", share_path.display())),
         Ok(false) => (),
-        Err(e) => return Err(LibraryError::InvalidSharePath),
+        Err(error) => {
+            return Err(format!(
+                "failed to inspect {}: {error}",
+                share_path.display()
+            ));
+        }
     }
     //Parse path from string
     let path = PathBuf::from(&path);
     if !path.exists() || !path.is_dir() {
-        return Err(LibraryError::InvalidSharePath);
+        return Err(format!("invalid library content path: {}", path.display()));
     }
     let file_name = path
         .file_name()
@@ -101,11 +111,16 @@ pub async fn create_new_library(
     let mut new_library = Library::new();
     new_library.share_path = Some(share_path.clone());
     new_library.library_config = Some(new_config.clone());
-    new_library.save_config()?;
+    new_library
+        .save_config()
+        .map_err(|error| format!("{error:#}"))?;
 
     {
         let mut state = app_state.lock().await;
-        state.switch_library(new_library).await?;
+        state
+            .switch_library(new_library)
+            .await
+            .map_err(|error| format!("{error:#}"))?;
     }
 
     info!("Successfully created and switched to new library");
@@ -115,7 +130,7 @@ pub async fn create_new_library(
 #[tauri::command]
 pub async fn initialize_library_workspace(
     app_state: State<'_, Mutex<AppState>>,
-) -> Result<(), AppError> {
+) -> Result<(), String> {
     info!("Initializing library workspace");
 
     {
@@ -123,18 +138,30 @@ pub async fn initialize_library_workspace(
 
         info!("Running migrations...");
         // Run database migrations
-        state.run_migrations().await?;
+        state
+            .run_migrations()
+            .await
+            .map_err(|error| format!("{error:#}"))?;
 
         info!("Trying to upsert root folders!");
         // Upsert root folders
-        state.upsert_root_folders().await?;
+        state
+            .upsert_root_folders()
+            .await
+            .map_err(|error| format!("{error:#}"))?;
 
         info!("Scanning library directories");
         // Perform initial directory scan
-        state.scan_library_directories().await?;
+        state
+            .scan_library_directories()
+            .await
+            .map_err(|error| format!("{error:#}"))?;
 
         //Create FileWatcher, set handle to state
-        state.create_file_watcher().await?;
+        state
+            .create_file_watcher()
+            .await
+            .map_err(|error| format!("{error:#}"))?;
 
         match state.file_watcher_handler.as_ref() {
             Some(handler) => {
@@ -148,7 +175,7 @@ pub async fn initialize_library_workspace(
                     }
                 }
             }
-            None => return Err(AppError::WatcherNotFound)?,
+            None => return Err("file watcher is not initialized".to_string()),
         }
     }
 

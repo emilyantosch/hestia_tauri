@@ -1,10 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use std::sync::Arc;
 use std::time::Duration;
 
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
 
-use crate::DbError;
 use crate::config::{DatabaseSettings, DatabaseType, SqliteConfig};
 
 #[derive(Debug)]
@@ -16,9 +15,10 @@ pub struct DatabaseManager {
 impl DatabaseManager {
     /// Create a new DatabaseManager with the provided settings
     pub async fn new(settings: DatabaseSettings) -> Result<Self> {
-        if !settings.is_configured() {
-            return Err(DbError::ConfigurationError)?;
-        }
+        ensure!(
+            settings.is_configured(),
+            "database configuration is invalid"
+        );
 
         let connection = Self::create_connection(&settings).await?;
 
@@ -94,10 +94,12 @@ impl DatabaseManager {
                 }
             }
             DatabaseType::None => {
-                return Err(DbError::ConfigurationError)?;
+                anyhow::bail!("database type is not configured");
             }
         }
 
-        Ok(Database::connect(options).await?)
+        Database::connect(options)
+            .await
+            .context("failed to connect to database")
     }
 }

@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-use crate::{config::app::AppState, data::filter::Filter, errors::DbError};
+use crate::{config::app::AppState, data::filter::Filter};
 use entity::files;
 
 /// Response for file scanning operations
@@ -232,14 +232,14 @@ pub async fn file_exists_in_database(
 pub async fn get_files_for_filter(
     filter: Filter,
     app_state: State<'_, Mutex<AppState>>,
-) -> Result<Vec<FileInfo>, DbError> {
+) -> Result<Vec<FileInfo>, String> {
     {
         let state = app_state.lock().await;
         let files = state
             .file_operations
             .get_files_for_filter(filter)
             .await
-            .map_err(|_| DbError::QueryError)?
+            .map_err(|error| format!("failed to query files for filter: {error:#}"))?
             .into_iter()
             .map(Into::into)
             .collect();

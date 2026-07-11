@@ -1,3 +1,4 @@
+use anyhow::Error as AppError;
 use services::fs::
 use crate::file_system::FileWatcherMessage;
 use crate::file_system::watcher::{FSEvent, FileWatcher};

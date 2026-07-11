@@ -224,11 +224,9 @@ impl AppState {
                         report.folders_deleted
                     );
                 }
-                Err(e) => {
-                    error!("Failed to scan directory {}: {:?}", path.display(), e);
-                    return Err(ScannerError::PathScanFailedError {
-                        path: path.to_string_lossy().to_string(),
-                    })?;
+                Err(error) => {
+                    return Err(error)
+                        .with_context(|| format!("failed to scan directory {}", path.display()));
                 }
             }
         }

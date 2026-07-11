@@ -1,5 +1,4 @@
-use anyhow::{Context, Result};
-use errors::{AppError, FileError, LibraryError};
+use anyhow::{Context, Result, bail};
 use library::library::Library;
 use library::library::LibraryConfig;
 use library::library::LibraryPathConfig;
@@ -12,7 +11,7 @@ fn check_delete_library() -> Result<()> {
     use tempfile::TempDir;
     use tracing::{error, info};
 
-    let path = dirs::data_dir().ok_or_else(|| LibraryError::InvalidSharePath)?;
+    let path = dirs::data_dir().context("operating system did not provide a data directory")?;
     let test_path = TempDir::new_in(path)?;
     let lib = Library::new().switch_or_create_lib(&test_path.path().to_path_buf())?;
     info!("Found or created library to be deleted!");
@@ -37,7 +36,7 @@ fn check_delete_library() -> Result<()> {
 fn check_library_creation_successful() -> Result<()> {
     use crate::config::library::Library;
 
-    let path = dirs::data_dir().ok_or_else(|| LibraryError::InvalidSharePath)?;
+    let path = dirs::data_dir().context("operating system did not provide a data directory")?;
     let test_path = TempDir::new_in(path)?;
     let lib = Library::new().switch_or_create_lib(&test_path.path().to_path_buf())?;
     match lib.library_config.as_ref() {
@@ -45,7 +44,7 @@ fn check_library_creation_successful() -> Result<()> {
             assert_eq!(conf.library_paths, vec![LibraryPathConfig::default()]);
         }
         None => {
-            return Err(LibraryError::ConfigCreationFailed)?;
+            bail!("library configuration was not created");
         }
     }
     lib.delete()?;
@@ -57,7 +56,7 @@ fn check_library_default_values() -> Result<()> {
     use crate::config::library::Library;
     use tempfile::TempDir;
 
-    let path = dirs::data_dir().ok_or_else(|| LibraryError::InvalidSharePath)?;
+    let path = dirs::data_dir().context("operating system did not provide a data directory")?;
     let test_path = TempDir::new_in(path)?;
     let lib = Library::new().switch_or_create_lib(&test_path.path().to_path_buf())?;
     if let Some(lib_config) = lib.library_config.as_ref() {
@@ -71,7 +70,7 @@ fn check_library_default_values() -> Result<()> {
 fn check_library_write_save_and_retrieve() -> Result<()> {
     println!("Start of test");
     info!("Start of test");
-    let path = dirs::data_dir().ok_or_else(|| LibraryError::InvalidSharePath)?;
+    let path = dirs::data_dir().context("operating system did not provide a data directory")?;
     let test_path = TempDir::new_in(path)?;
     info!("Data home configured");
     let mut lib = Library::new().switch_or_create_lib(&test_path.path().to_path_buf())?;

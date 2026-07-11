@@ -1,8 +1,7 @@
 use crate::database::FileOperations;
-use crate::errors::{HashError, WatcherError};
 use crate::file_system::{FileHash, FolderHash};
 use crate::utils::canon_path::CanonPath;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail, ensure};
 use notify::event::{CreateKind, EventKind, RemoveKind};
 use notify::{Error, RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{
@@ -183,20 +182,17 @@ impl FileWatcher {
     }
 
     pub async fn unwatch(&mut self, path: CanonPath) -> Result<()> {
-        match self.watched_paths.as_mut() {
-            Some(paths) => {
-                if paths.remove(&path) {
-                    return Ok(());
-                }
-                Err(WatcherError::PathNotWatched {
-                    path: path.as_str()?.to_string(),
-                })?
-            }
-            None => Err(WatcherError::PathNotWatched {
-                path: path.as_str()?.to_string(),
-            })
-            .context("There is no path in the watched_paths vec, so nothing can be unwatched!"),
-        }
+        let path_display = path.as_str()?.to_string();
+        let watched_paths = self
+            .watched_paths
+            .as_mut()
+            .context("cannot unwatch a path before any paths have been watched")?;
+
+        ensure!(
+            watched_paths.remove(&path),
+            "path {path_display} is not being watched"
+        );
+        Ok(())
     }
 
     //FIXME: This function works. However, the configuration of the paths will need to be
@@ -206,11 +202,11 @@ impl FileWatcher {
     //library that is currently being looked at. I assume we want to use different db files for
     //different vault configs.
     pub async fn watch(&mut self, path: CanonPath) -> Result<()> {
-        match path.try_exists() {
-            Ok(true) => (),
-            Ok(false) => return Err(WatcherError::PathNotFound)?,
-            Err(e) => return Err(e)?,
-        }
+        ensure!(
+            path.try_exists()
+                .with_context(|| format!("failed to inspect watch path {path:?}"))?,
+            "watch path {path:?} does not exist"
+        );
         if let Some(watcher) = self.watcher.as_mut() {
             watcher.watch(path.as_ref(), RecursiveMode::Recursive)?;
         }
@@ -328,7 +324,7 @@ impl FileWatcher {
                 }
             }
         } else {
-            return Err(WatcherError::InvalidEventType)?;
+            bail!("watcher event contains neither a file event nor a folder event");
         }
         Ok(())
     }
@@ -338,10 +334,10 @@ async fn to_file_or_folder_event_and_send(
     event: DebouncedEvent,
     processed_event_tx: &Sender<FSEvent>,
 ) -> Result<()> {
-    let path = match event.paths.last() {
-        Some(path) => path,
-        None => return Err(WatcherError::PathNotFound)?,
-    };
+    let path = event
+        .paths
+        .last()
+        .context("watcher event does not contain a path")?;
 
     info!("Deciding handling based on event type for {event:#?}");
     match (path.is_dir(), event.kind) {
@@ -371,10 +367,11 @@ async fn to_file_event_and_send(
     info!("The event kind is {kind:#?}");
     if kind != EventKind::Remove(RemoveKind::File) {
         hash = Some(
-            FileHash::hash(match &paths.last() {
-                Some(x) => x,
-                None => return Err(HashError::InvalidPathError)?,
-            })
+            FileHash::hash(
+                paths
+                    .last()
+                    .context("file event does not contain a path to hash")?,
+            )
             .await?,
         );
     }
@@ -401,12 +398,11 @@ async fn to_folder_event_and_send(
     info!("The event kind is {kind:#?}");
     if kind != EventKind::Remove(RemoveKind::Folder) {
         hash = Some(
-            FolderHash::hash(match &paths.last() {
-                Some(x) => x,
-                None => {
-                    return Err(HashError::InvalidPathError)?;
-                }
-            })
+            FolderHash::hash(
+                paths
+                    .last()
+                    .context("folder event does not contain a path to hash")?,
+            )
             .await?,
         );
     }

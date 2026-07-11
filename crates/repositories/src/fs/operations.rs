@@ -4,7 +4,6 @@ use entity::prelude::FileTypes;
 use entity::{file_has_tags, file_system_identifier, file_types};
 use entity::{files, prelude::Files};
 use entity::{folders, prelude::Folders};
-use errors::database::DbError;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, IntoActiveModel,
@@ -83,20 +82,23 @@ impl FileRepository {
             return Ok(None);
         }
 
-        let parent_folder_path = match folder_path.parent() {
-            Some(path) => path,
-            None => return Err(DbError::ConfigurationError)?,
-        };
+        let parent_folder_path = folder_path
+            .parent()
+            .with_context(|| format!("folder {} has no parent", folder_path.display()))?;
 
         let parent_folder_model = Folders::find()
             .filter(folders::Column::Path.eq(parent_folder_path.to_string_lossy().to_string()))
             .one(transaction)
             .await?;
 
-        let parent_folder_id = match parent_folder_model {
-            Some(model) => model.id,
-            None => return Err(DbError::QueryError)?,
-        };
+        let parent_folder_id = parent_folder_model
+            .with_context(|| {
+                format!(
+                    "parent folder {} is not registered in the database",
+                    parent_folder_path.display()
+                )
+            })?
+            .id;
 
         Ok(Some(parent_folder_id))
     }
@@ -230,10 +232,10 @@ impl FileRepository {
         let connection = self.database_manager.get_connection();
         let transaction = connection.begin().await?;
 
-        let folder_path = match event.paths.last() {
-            Some(path) => path,
-            None => return Err(DbError::ConfigurationError)?,
-        };
+        let folder_path = event
+            .paths
+            .last()
+            .context("cannot upsert a folder event without a path")?;
 
         let folder_name = folder_path
             .file_name()
@@ -304,10 +306,10 @@ impl FileRepository {
         let transaction = connection.begin().await?;
 
         // Extract file information from the event
-        let file_path = match event.paths.last() {
-            Some(path) => path,
-            None => return Err(DbError::ConfigurationError)?,
-        };
+        let file_path = event
+            .paths
+            .last()
+            .context("cannot upsert a file event without a path")?;
 
         let file_name = file_path
             .file_name()

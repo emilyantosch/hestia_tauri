@@ -7,7 +7,6 @@ use tracing::info;
 
 use anyhow::{Context, Result};
 
-use crate::errors::{FileError, HashError};
 use crate::file_system::FileId;
 
 #[derive(Debug)]
@@ -32,10 +31,10 @@ impl FileHash {
 
         let content_hash = Self::hash_file_content(path).await?;
 
-        let file_name = match path.file_name().and_then(|n| n.to_str()) {
-            Some(file_name) => file_name,
-            None => return Err(HashError::InvalidPathError)?,
-        };
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .with_context(|| format!("path {} has no valid file name", path.display()))?;
 
         let identity_hash = Self::hash_identity(&content_hash, &file_id, file_name).await?;
 
@@ -50,10 +49,9 @@ impl FileHash {
     where
         T: AsRef<Path> + std::fmt::Debug + Clone,
     {
-        let content = match async_fs::read(path.clone()).await {
-            Ok(content) => content,
-            Err(e) => return Err(HashError::IoError)?,
-        };
+        let content = async_fs::read(path.clone())
+            .await
+            .with_context(|| format!("failed to read {path:?} for hashing"))?;
         let mut hasher = Hasher::new();
         hasher.update(&content);
         Ok(hasher.finalize())
@@ -97,10 +95,10 @@ impl FolderHash {
 
         let (structure_hash, content_hash) = Self::_hash_folder(path).await?;
 
-        let folder_name = match path.file_name().and_then(|n| n.to_str()) {
-            Some(folder_name) => folder_name,
-            None => return Err(HashError::InvalidPathError)?,
-        };
+        let folder_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .with_context(|| format!("path {} has no valid folder name", path.display()))?;
 
         let identity_hash =
             Self::hash_identity(&structure_hash, &content_hash, &file_id, folder_name).await?;

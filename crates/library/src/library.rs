@@ -3,8 +3,7 @@
 //! This module provides the core business logic for managing libraries,
 //! including configuration, paths, and lifecycle operations.
 
-use anyhow::Result;
-use errors::{fs::FileError, library::LibraryError};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -90,15 +89,17 @@ impl Library {
         Ok(())
     }
 
-    /// Return the library from the previous run, may return LibraryError if there is none
+    /// Return the library from the previous run.
     pub fn last() -> Result<Library> {
         let last_path = io::create_or_validate_data_directory()?.join("hestia/last_lib.toml");
         let last_content = io::read_file_to_string(&last_path)?;
 
         let last_lib_path: LastLibrary = toml::from_str(&last_content)?;
-        let share_path = last_lib_path.path.ok_or(LibraryError::InvalidSharePath)?;
+        let share_path = last_lib_path
+            .path
+            .context("last library configuration does not contain a path")?;
 
-        Ok(Self::new().switch_or_create_lib(&share_path)?)
+        Self::new().switch_or_create_lib(&share_path)
     }
 
     /// Return the last library or create a new one if none exists
@@ -117,7 +118,7 @@ impl Library {
         let db_path = self
             .share_path
             .as_ref()
-            .ok_or(LibraryError::InvalidSharePath)?
+            .context("cannot get database path before selecting a library")?
             .join("db.sqlite");
 
         Ok(CanonPath::from(db_path))
@@ -135,7 +136,7 @@ impl Library {
         let share_path = self
             .share_path
             .as_ref()
-            .ok_or(LibraryError::InvalidSharePath)?;
+            .context("cannot save configuration before selecting a library")?;
 
         io::ensure_directory_exists(share_path)?;
 
@@ -149,7 +150,7 @@ impl Library {
         let lib = self
             .library_config
             .as_ref()
-            .ok_or(LibraryError::InvalidSharePath)?;
+            .context("cannot save a library without configuration")?;
 
         let content = toml::to_string(lib)?;
         tracing::info!("Saving config to {config_path:#?}");
@@ -165,7 +166,7 @@ impl Library {
 
     /// Load configuration from disk
     //TODO: Implement this method
-    pub fn load_config(&self) -> Result<(), FileError> {
+    pub fn load_config(&self) -> Result<()> {
         Ok(())
     }
 
@@ -178,7 +179,11 @@ impl Library {
 
         // Validate that share path is within data home
         if !share_path.starts_with(&datahome) {
-            return Err(LibraryError::InvalidSharePath)?;
+            bail!(
+                "library path {} must be inside the data directory {}",
+                share_path.display(),
+                datahome.display()
+            );
         }
 
         // Ensure the share path directory exists

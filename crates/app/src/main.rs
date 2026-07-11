@@ -3,8 +3,8 @@
 
 use std::path::PathBuf;
 
-use crate::errors::*;
 use crate::file_system::FileWatcher;
+use anyhow::{Context, Result};
 
 #[tokio::main]
 async fn main() -> Result<()> {

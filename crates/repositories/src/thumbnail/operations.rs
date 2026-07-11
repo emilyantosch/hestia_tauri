@@ -12,7 +12,6 @@ use entity::{prelude::*, thumbnails};
 
 use crate::data::internal::thumbnails::{Thumbnail, ThumbnailSize};
 use crate::database::DatabaseManager;
-use crate::errors::thumbnail::ThumbnailError;
 
 /// Statistics about thumbnails in the database
 #[derive(Debug, Clone)]
@@ -107,12 +106,10 @@ impl ThumbnailOperations {
             .await
             .context("Failed to query thumbnails for file")?;
 
-        let thumbnails = match model {
-            Some(m) => Thumbnail::from_model(m),
-            None => Err(ThumbnailError::ThumbnailNotFound)?,
-        };
+        let model = model
+            .context("thumbnail is not in the database; it may not have been generated yet")?;
 
-        thumbnails.context("Failed to convert thumbnail models")
+        Thumbnail::from_model(model).context("Failed to convert thumbnail model")
     }
 
     /// Get all thumbnail for a specific range of files and sizes

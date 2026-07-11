@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use tokio::fs as async_fs;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result};
 
 use crate::file_id::FileId;
 
@@ -30,9 +30,10 @@ impl FileHash {
 
         let content_hash = Self::hash_file_content(path).await?;
 
-        let Some(file_name) = path.file_name().and_then(|n| n.to_str()) else {
-            bail!("Tried to hash invalid path and could not find file name");
-        };
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .with_context(|| format!("path {} has no valid file name", path.display()))?;
 
         let identity_hash = Self::hash_identity(&content_hash, &file_id, file_name)?;
 
@@ -48,9 +49,9 @@ impl FileHash {
         T: AsRef<Path> + std::fmt::Debug + Clone,
     {
         let mut hasher = Hasher::new();
-        let Ok(content) = async_fs::read(path.clone()).await else {
-            bail!("Could not read path to hash");
-        };
+        let content = async_fs::read(path.clone())
+            .await
+            .with_context(|| format!("failed to read {path:?} for hashing"))?;
         hasher.update(&content);
         Ok(hasher.finalize())
     }
@@ -93,9 +94,10 @@ impl FolderHash {
 
         let (structure_hash, content_hash) = Self::_hash_folder(path).await?;
 
-        let Some(folder_name) = path.file_name().and_then(|n| n.to_str()) else {
-            bail!("Could not find folder name to hash");
-        };
+        let folder_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .with_context(|| format!("path {} has no valid folder name", path.display()))?;
 
         let identity_hash =
             Self::hash_identity(&structure_hash, &content_hash, &file_id, folder_name);

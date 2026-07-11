@@ -2,7 +2,6 @@ use crate::data::internal::thumbnails::{ThumbnailGenerator, ThumbnailSize};
 use crate::database::thumbnail_repository::ThumbnailOperations;
 
 use crate::model::file::File;
-use crate::thumbnails::ThumbnailServiceError;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -231,9 +230,7 @@ impl ThumbnailWorker {
                     self.worker_id, job.file_id
                 );
                 self.handle_failed_job(job).await;
-                return Err(ThumbnailError::GenerationFailed {
-                    reason: format!("Worker {} thumbnail generation timed out", self.worker_id),
-                })?;
+                anyhow::bail!("worker {} thumbnail generation timed out", self.worker_id);
             }
         }
 
@@ -415,10 +412,9 @@ impl ThumbnailProcessor {
 
         for file_info in file_infos {
             for &size in &sizes {
-                let file_id = match file_info.id {
-                    Some(id) => id,
-                    None => return Err(ThumbnailError::FileIdNotProvided)?,
-                };
+                let file_id = file_info
+                    .id
+                    .context("file ID for thumbnail generation was not provided")?;
                 // Check if thumbnail already exists
                 match self.repository.get_by_file_and_size(file_id, size).await {
                     Ok(Some(_)) => {

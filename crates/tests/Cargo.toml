@@ -10,7 +10,5 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 
-errors = { workspace = true }
-
 [lints]
 workspace = true

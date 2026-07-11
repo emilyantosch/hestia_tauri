@@ -6,8 +6,7 @@
 //! - Database file management
 //! - Last library path tracking
 
-use anyhow::Result;
-use errors::library::LibraryError;
+use anyhow::{Context, Result, bail};
 use std::{
     fs::{self, OpenOptions},
     io::{Read, Write},
@@ -17,8 +16,12 @@ use std::{
 /// Read the content of a file as a String
 pub fn read_file_to_string(path: &Path) -> Result<String> {
     let mut content = String::new();
-    let mut file = OpenOptions::new().read(true).open(path)?;
-    file.read_to_string(&mut content)?;
+    let mut file = OpenOptions::new()
+        .read(true)
+        .open(path)
+        .with_context(|| format!("failed to open {} for reading", path.display()))?;
+    file.read_to_string(&mut content)
+        .with_context(|| format!("failed to read {}", path.display()))?;
     Ok(content)
 }
 
@@ -28,28 +31,34 @@ pub fn write_string_to_file(path: &Path, content: &str) -> Result<()> {
         .create(true)
         .write(true)
         .truncate(true)
-        .open(path)?;
-    file.write_all(content.as_bytes())?;
-    file.flush()?;
-    file.sync_all()?;
+        .open(path)
+        .with_context(|| format!("failed to open {} for writing", path.display()))?;
+    file.write_all(content.as_bytes())
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    file.flush()
+        .with_context(|| format!("failed to flush {}", path.display()))?;
+    file.sync_all()
+        .with_context(|| format!("failed to sync {}", path.display()))?;
     Ok(())
 }
 
 /// Create a directory and all its parent directories if they don't exist
 pub fn ensure_directory_exists(path: &Path) -> Result<()> {
-    if !path.try_exists().is_ok_and(|exists| exists) {
-        fs::create_dir_all(path)?;
+    if !path
+        .try_exists()
+        .with_context(|| format!("failed to inspect directory {}", path.display()))?
+    {
+        fs::create_dir_all(path)
+            .with_context(|| format!("failed to create directory {}", path.display()))?;
     }
     Ok(())
 }
 
 /// Create or validate that the data directory exists and return its path
 pub fn create_or_validate_data_directory() -> Result<PathBuf> {
-    let datahome = dirs::data_dir().ok_or(LibraryError::DataHomeNotFoundError)?;
+    let datahome = dirs::data_dir().context("operating system did not provide a data directory")?;
 
-    if !datahome.try_exists().is_ok_and(|exists| exists) {
-        fs::create_dir_all(&datahome)?;
-    }
+    ensure_directory_exists(&datahome)?;
 
     Ok(datahome)
 }
@@ -57,14 +66,12 @@ pub fn create_or_validate_data_directory() -> Result<PathBuf> {
 /// Ensure a file exists at the given path, creating it with default content if needed
 /// Returns the path to the file
 pub fn ensure_file_exists(path: &Path, default_content: &str) -> Result<PathBuf> {
-    match fs::exists(path) {
-        Ok(true) => Ok(path.to_path_buf()),
-        Ok(false) => {
-            write_string_to_file(path, default_content)?;
-            Ok(path.to_path_buf())
-        }
-        Err(_) => Err(LibraryError::Io)?,
+    if fs::exists(path).with_context(|| format!("failed to inspect file {}", path.display()))? {
+        return Ok(path.to_path_buf());
     }
+
+    write_string_to_file(path, default_content)?;
+    Ok(path.to_path_buf())
 }
 
 /// Create or open a database file at the given path
@@ -74,34 +81,33 @@ pub fn ensure_database_file(share_path: &Path) -> Result<PathBuf> {
         .create(true)
         .write(true)
         .truncate(false)
-        .open(&db_path)?;
+        .open(&db_path)
+        .with_context(|| format!("failed to create database file {}", db_path.display()))?;
     Ok(db_path)
 }
 
 /// Delete a directory and all its contents
 pub fn delete_directory(path: &Path) -> Result<()> {
-    match fs::exists(path) {
-        Ok(true) => {
-            fs::remove_dir_all(path)?;
-            Ok(())
-        }
-        Ok(false) => Err(LibraryError::InvalidSharePath)?,
-        Err(e) => Err(LibraryError::ConfigDeletionError {
-            error: e.to_string(),
-        })?,
+    if !fs::exists(path)
+        .with_context(|| format!("failed to inspect directory {}", path.display()))?
+    {
+        bail!("cannot delete missing directory {}", path.display());
     }
+
+    fs::remove_dir_all(path)
+        .with_context(|| format!("failed to delete directory {}", path.display()))
 }
 
 /// List all entries in a directory and return their paths as strings
 pub fn list_directory_entries(path: &Path) -> Result<Vec<String>> {
-    let entries = fs::read_dir(path)?;
-
-    let paths: Vec<String> = entries
-        .filter_map(Result::ok)
-        .map(|entry| entry.path().to_string_lossy().to_string())
-        .collect();
-
-    Ok(paths)
+    fs::read_dir(path)
+        .with_context(|| format!("failed to list directory {}", path.display()))?
+        .map(|entry| {
+            entry
+                .map(|entry| entry.path().to_string_lossy().to_string())
+                .with_context(|| format!("failed to read an entry in {}", path.display()))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -213,12 +219,17 @@ mod tests {
     }
 
     #[test]
-    fn test_delete_nonexistent_directory_errors() {
+    fn test_delete_nonexistent_directory_reports_path() {
         let temp_dir = setup_test_dir();
         let nonexistent = temp_dir.path().join("does_not_exist");
 
-        let result = delete_directory(&nonexistent);
-        assert!(result.is_err());
+        let error = delete_directory(&nonexistent).expect_err("missing directory should fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains(&nonexistent.display().to_string())
+        );
     }
 
     #[test]

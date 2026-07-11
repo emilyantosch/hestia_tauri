@@ -1,12 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::{Error, Result, bail};
 use chrono::Local;
 use entity::thumbnails;
-use errors::thumbnail::ThumbnailServiceError;
 use sea_orm::{ActiveValue, Set};
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::io::Cursor;
-use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ThumbnailSize {
@@ -53,22 +50,20 @@ impl From<ThumbnailSize> for String {
 }
 
 impl TryFrom<&str> for ThumbnailSize {
-    type Error = ThumbnailServiceError;
+    type Error = Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
             "small" => Ok(ThumbnailSize::Small),
             "medium" => Ok(ThumbnailSize::Medium),
             "large" => Ok(ThumbnailSize::Large),
-            _ => Err(ThumbnailServiceError::UnsupportedThumbnailSize {
-                requested_size: value.to_string(),
-            }),
+            _ => bail!("unsupported thumbnail size: {value}"),
         }
     }
 }
 
 impl TryFrom<String> for ThumbnailSize {
-    type Error = ThumbnailServiceError;
+    type Error = Error;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         Self::try_from(value.as_str())
@@ -281,7 +276,9 @@ mod tests {
             ThumbnailSize::try_from("large").unwrap(),
             ThumbnailSize::Large
         );
-        assert!(ThumbnailSize::try_from("invalid").is_err());
+        let error = ThumbnailSize::try_from("invalid")
+            .expect_err("an unsupported thumbnail size should fail");
+        assert_eq!(error.to_string(), "unsupported thumbnail size: invalid");
 
         // Test TryFrom<String>
         assert_eq!(

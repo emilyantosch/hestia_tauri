@@ -6,16 +6,16 @@ use std::path::{Path, PathBuf};
 use tokio::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
-use tauri::{command, State};
+use tauri::{State, command};
 
 use tracing::info;
 
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, Set};
 
 use super::file_operations::FileInfo;
+use crate::config::app::AppState;
 use crate::data::folder_info::FolderInfo;
 use crate::data::watched_folders::WatchedFolderTree;
-use crate::{config::app::AppState, errors::DbError};
 
 use entity::{files, folders, prelude::*};
 

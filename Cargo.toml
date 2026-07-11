@@ -1,5 +1,5 @@
 [workspace]
-members = [ "crates/app", "crates/commands", "crates/controllers", "crates/entity", "crates/errors", "crates/errors-derive", "crates/events", "crates/hash", "crates/io", "crates/library", "crates/migration", "crates/model", "crates/repositories", "crates/services", "crates/tests" ]
+members = [ "crates/app", "crates/commands", "crates/controllers", "crates/entity", "crates/events", "crates/hash", "crates/io", "crates/library", "crates/migration", "crates/model", "crates/repositories", "crates/services", "crates/tests" ]
 resolver = "3"
 
 [profile]
@@ -30,7 +30,6 @@ async-trait = "0.1.89"
 blake3 = "1.8.2"
 cfg-if = "1.0.1"
 chrono = { features = [ "serde" ], version = "0.4" }
-convert_case = "0.6"
 dirs = "6.0.0"
 gtk = "0.18.2"
 image = { default-features = false, features = [ "bmp", "gif", "jpeg", "png", "tiff", "webp" ], version = "0.25" }
@@ -40,20 +39,16 @@ notify = "8.0.0"
 notify-debouncer-full = "0.6.0"
 num_cpus = "1.17.0"
 password-hash = { features = [ "rand_core" ], version = "0.6.0-rc.1" }
-proc-macro2 = "1"
-quote = "1"
 rand = "0.9.1"
 rfd = { default-features = false, features = [  ], version = "*" }
 sea-orm = { features = [ "chrono", "macros", "runtime-tokio-rustls", "sqlx-sqlite" ], version = "1.1.10" }
 secrecy = "0.10.3"
 serde = { features = [ "derive" ], version = "1" }
 serde_json = "1"
-syn = { features = [ "derive", "full", "parsing" ], version = "2" }
 tauri = { features = [ "webkit2gtk" ], version = "2" }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tempfile = "3.20.0"
-thiserror = "2.0.12"
 tokio = { features = [ "full" ], version = "*" }
 toml = "0.8.23"
 tracing = "0.1.41"
@@ -63,8 +58,6 @@ app = { path = "crates/app" }
 commands = { path = "crates/routes" }
 controllers = { path = "crates/controllers" }
 entity = { path = "crates/entity" }
-errors = { path = "crates/errors" }
-errors-derive = { path = "crates/errors-derive" }
 events = { path = "crates/events" }
 hash = { path = "crates/hash" }
 io = { path = "crates/io" }

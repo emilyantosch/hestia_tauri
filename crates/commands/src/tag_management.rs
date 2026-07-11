@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
-use tauri::{command, State};
+use tauri::{State, command};
 
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DbErr, EntityTrait, IntoActiveModel, QueryFilter, Set,
@@ -9,7 +9,6 @@ use sea_orm::{
 };
 
 use crate::config::app::AppState;
-use crate::errors::DbError;
 
 use entity::{file_has_tags, files, prelude::*, tags};
 
@@ -48,7 +47,7 @@ pub struct FileTagInfo {
 pub async fn create_tag(
     app_state: State<'_, Mutex<AppState>>,
     tag_name: String,
-) -> Result<TagInfo, DbError> {
+) -> Result<TagInfo, String> {
     let connection = {
         let state = app_state.lock().unwrap();
         state.database_manager.get_connection()
@@ -66,8 +65,8 @@ pub async fn create_tag(
         Ok(None) => {
             // Tag doesn't exist, continue with creation
         }
-        Err(e) => {
-            return Err(DbError::QueryError);
+        Err(error) => {
+            return Err(format!("failed to query tag by name: {error}"));
         }
     }
 
@@ -81,13 +80,13 @@ pub async fn create_tag(
 
     match new_tag.insert(&*connection).await {
         Ok(tag) => Ok(tag.into()),
-        Err(e) => Err(DbError::InsertError),
+        Err(error) => Err(format!("failed to insert tag: {error}")),
     }
 }
 
 /// Get all tags
 #[command]
-pub async fn get_all_tags(app_state: State<'_, Mutex<AppState>>) -> Result<Vec<TagInfo>, DbError> {
+pub async fn get_all_tags(app_state: State<'_, Mutex<AppState>>) -> Result<Vec<TagInfo>, String> {
     let connection = {
         let state = app_state.lock().unwrap();
         state.database_manager.get_connection()
@@ -95,7 +94,7 @@ pub async fn get_all_tags(app_state: State<'_, Mutex<AppState>>) -> Result<Vec<T
 
     match Tags::find().all(&*connection).await {
         Ok(tags) => Ok(tags.into_iter().map(|t| t.into()).collect()),
-        Err(e) => Err(DbError::QueryError),
+        Err(error) => Err(format!("failed to query tags: {error}")),
     }
 }
 
@@ -104,7 +103,7 @@ pub async fn get_all_tags(app_state: State<'_, Mutex<AppState>>) -> Result<Vec<T
 pub async fn get_tag_by_id(
     app_state: State<'_, Mutex<AppState>>,
     tag_id: i32,
-) -> Result<Option<TagInfo>, DbError> {
+) -> Result<Option<TagInfo>, String> {
     let connection = {
         let state = app_state.lock().unwrap();
         state.database_manager.get_connection()
@@ -113,7 +112,7 @@ pub async fn get_tag_by_id(
     match Tags::find_by_id(tag_id).one(&*connection).await {
         Ok(Some(tag)) => Ok(Some(tag.into())),
         Ok(None) => Ok(None),
-        Err(e) => Err(DbError::QueryError),
+        Err(error) => Err(format!("failed to query tag by ID: {error}")),
     }
 }
 
@@ -122,7 +121,7 @@ pub async fn get_tag_by_id(
 pub async fn get_tag_by_name(
     app_state: State<'_, Mutex<AppState>>,
     tag_name: String,
-) -> Result<Option<TagInfo>, DbError> {
+) -> Result<Option<TagInfo>, String> {
     let connection = {
         let state = app_state.lock().unwrap();
         state.database_manager.get_connection()
@@ -135,7 +134,7 @@ pub async fn get_tag_by_name(
     {
         Ok(Some(tag)) => Ok(Some(tag.into())),
         Ok(None) => Ok(None),
-        Err(e) => Err(DbError::QueryError),
+        Err(error) => Err(format!("failed to query tag by name: {error}")),
     }
 }
 
@@ -205,7 +204,10 @@ pub async fn delete_tag(
         Ok(_) => {}
         Err(e) => {
             if let Err(rollback_err) = transaction.rollback().await {
-                return Err(format!("Failed to delete file-tag relationships and rollback failed: {} (rollback error: {})", e, rollback_err));
+                return Err(format!(
+                    "Failed to delete file-tag relationships and rollback failed: {} (rollback error: {})",
+                    e, rollback_err
+                ));
             }
             return Err(format!("Failed to delete file-tag relationships: {}", e));
         }

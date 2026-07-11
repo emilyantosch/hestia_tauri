@@ -1,3 +1,5 @@
+use anyhow::{Context, Result, ensure};
+
 pub struct ThumbnailGenerator {
     filter_type: FilterType,
 }
@@ -41,12 +43,11 @@ impl ThumbnailGenerator {
         size: ThumbnailSize,
     ) -> Result<Thumbnail> {
         // Check if file exists first
-        if !file_path.exists() {
-            return Err(ThumbnailServiceError::FileNotFound {
-                path: file_path.display().to_string(),
-            })
-            .context("The path to the file to be converted is invalid!");
-        }
+        ensure!(
+            file_path.exists(),
+            "file not found: {}",
+            file_path.display()
+        );
 
         // Detect file type first
         let file_data = std::fs::read(file_path)
