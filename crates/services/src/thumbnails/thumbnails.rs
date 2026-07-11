@@ -1,13 +1,14 @@
-use crate::data::internal::thumbnails::{ThumbnailGenerator, ThumbnailSize};
-use crate::database::thumbnail_repository::ThumbnailOperations;
-
-use crate::model::file::File;
+use crate::thumbnails::generator::ThumbnailGenerator;
 use anyhow::{Context, Result};
+use model::services::file::FileSystemFile as File;
+use model::services::thumbnail::ThumbnailSize;
+use repositories::thumbnail::operations::ThumbnailOperations;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::time::timeout;
+use tracing::{debug, error, info, warn};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum ThumbnailJobStatus {

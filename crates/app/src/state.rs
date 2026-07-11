@@ -1,15 +1,25 @@
 use anyhow::{Context, Result};
 use library::library::Library;
+use migration::{Migrator, MigratorTrait};
+use model::commands::watched_folders::WatchedFolderTree;
+use model::services::CanonPath;
+use repositories::config::DatabaseSettings;
+use repositories::fs::operations::FileRepository as FileOperations;
+use repositories::manager::DatabaseManager;
+use repositories::thumbnail::operations::ThumbnailOperations;
+use services::fs::scanner::DirectoryScanner;
+use services::fs::watcher::{DatabaseFileWatcherEventHandler, FileWatcher, FileWatcherHandler};
+use services::thumbnails::generator::ThumbnailGenerator;
+use services::thumbnails::thumbnails::{ThumbnailProcessor, ThumbnailProcessorHandler};
 use std::{collections::HashMap, sync::Arc};
 use tracing::{error, info};
-
-use migration::{Migrator, MigratorTrait};
 
 /// Unified application state containing all components
 #[derive(Debug)]
 pub struct AppState {
     pub library: Library,
-    pub file_operations: FileRepository,
+    pub database_manager: Arc<DatabaseManager>,
+    pub file_operations: FileOperations,
     pub directory_scanner: DirectoryScanner,
     pub file_watcher_handler: Option<FileWatcherHandler>,
     pub thumbnail_processor_handler: Option<ThumbnailProcessorHandler>,
@@ -34,6 +44,7 @@ impl AppState {
 
         Ok(Self {
             library,
+            database_manager,
             file_operations,
             directory_scanner,
             file_watcher_handler: None,
@@ -99,19 +110,12 @@ impl AppState {
         let connection_string = format!("sqlite:///{}", db_path.as_str()?);
         info!("Updating database connection to: {}", connection_string);
 
-        // Create new database settings for the library database
-        let sqlite_config = crate::config::database::SqliteConfig {
-            con_string: connection_string,
-            create_if_missing: true,
-            connection_timeout_ms: 30000,
-            journal_mode: sea_orm::sqlx::sqlite::SqliteJournalMode::Wal,
-            synchronous: sea_orm::sqlx::sqlite::SqliteSynchronous::Normal,
-        };
-        let settings = crate::config::database::DatabaseSettings {
-            db_type: crate::config::database::DatabaseType::Sqlite,
-            sqlite_config: Some(sqlite_config),
-            postgres_config: None,
-        };
+        let settings = DatabaseSettings::new(
+            connection_string,
+            30_000,
+            sea_orm::sqlx::sqlite::SqliteJournalMode::Wal,
+            sea_orm::sqlx::sqlite::SqliteSynchronous::Normal,
+        );
 
         // Create new database manager
         self.database_manager = Arc::new(DatabaseManager::new(settings).await?);

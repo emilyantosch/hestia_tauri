@@ -50,7 +50,8 @@
               librsvg
               libsoup_3
               pango
-              libiconv.dev
+              webkitgtk_4_1
+              libiconv
             ];
             nativeBuildInputs = [
               pkg-config
@@ -60,9 +61,6 @@
             ++ lib.optionals pkgs.stdenv.isDarwin [
             ];
             NIX_SHELL = "hestia";
-            shellHook = ''
-              nu
-            '';
           };
       }
     );

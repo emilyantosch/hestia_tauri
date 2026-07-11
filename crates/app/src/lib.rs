@@ -3,10 +3,10 @@ mod state;
 use anyhow::Result;
 use library::library::Library;
 
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 
 fn init_tracing() {
     let filter = std::env::var("RUST_LOG")
@@ -24,6 +24,7 @@ fn init_tracing() {
         .init();
 }
 
-pub(crate) fn falliable_main(library: Library) -> Result<()> {
+pub fn falliable_main(_library: Library) -> Result<()> {
+    init_tracing();
     Ok(())
 }

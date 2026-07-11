@@ -1,4 +1,9 @@
 use anyhow::{Context, Result, ensure};
+use image::imageops::FilterType;
+use image::{DynamicImage, ImageBuffer, ImageFormat, Rgba};
+use model::services::thumbnail::{Thumbnail, ThumbnailSize};
+use std::io::Cursor;
+use std::path::Path;
 
 pub struct ThumbnailGenerator {
     filter_type: FilterType,

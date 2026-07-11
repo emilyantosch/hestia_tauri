@@ -4,15 +4,21 @@ use entity::prelude::FileTypes;
 use entity::{file_has_tags, file_system_identifier, file_types};
 use entity::{files, prelude::Files};
 use entity::{folders, prelude::Folders};
+use events::{FileEvent, FolderEvent};
+use hash::file_id::FileId;
+use model::commands::filter::{Filter, FolderFilter, TagFilter};
+use model::commands::watched_folders::WatchedFolderTree;
+use model::services::file::FileSystemFile as File;
+use model::services::folder::FileSystemFolder as Folder;
 use sea_orm::ActiveValue::Set;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, IntoActiveModel,
-    QueryFilter, TransactionTrait,
+    QueryFilter, QuerySelect, TransactionTrait,
 };
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
-use tracing::instrument;
+use tracing::{info, instrument};
 
 use crate::manager::DatabaseManager;
 use crate::thumbnail::operations::ThumbnailOperations;
@@ -797,8 +803,10 @@ impl FileRepository {
 
     /// Clear file type cache (useful for testing or cache invalidation)
     pub async fn clear_file_type_cache(&self) {
-        let mut cache = self.file_type_cache.write()?;
-        cache.clear();
+        self.file_type_cache
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
     }
 
     /// Get or create file type with caching
@@ -812,7 +820,10 @@ impl FileRepository {
     {
         // Check cache first
         {
-            let cache = self.file_type_cache.read()?;
+            let cache = self
+                .file_type_cache
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(&type_id) = cache.get(file_type_name) {
                 return Ok(type_id);
             }
@@ -825,7 +836,10 @@ impl FileRepository {
 
         // Update cache
         {
-            let mut cache = self.file_type_cache.write()?;
+            let mut cache = self
+                .file_type_cache
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             cache.insert(file_type_name.to_string(), type_id);
         }
 
@@ -926,7 +940,10 @@ impl FileRepository {
         let connection = self.database_manager.get_connection();
         let all_types = FileTypes::find().all(&*connection).await?;
 
-        let mut cache = self.file_type_cache.write().await;
+        let mut cache = self
+            .file_type_cache
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for file_type in all_types {
             cache.insert(file_type.name, file_type.id);
         }

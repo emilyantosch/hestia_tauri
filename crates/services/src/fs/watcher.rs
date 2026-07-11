@@ -1,12 +1,13 @@
-use crate::database::FileOperations;
-use crate::file_system::{FileHash, FolderHash};
-use crate::utils::canon_path::CanonPath;
 use anyhow::{Context, Result, bail, ensure};
+use events::{FileEvent, FolderEvent};
+use hash::hash::{FileHash, FolderHash};
+use model::services::CanonPath;
 use notify::event::{CreateKind, EventKind, RemoveKind};
 use notify::{Error, RecommendedWatcher, RecursiveMode};
 use notify_debouncer_full::{
     DebounceEventResult, DebouncedEvent, Debouncer, RecommendedCache, new_debouncer,
 };
+use repositories::fs::operations::FileRepository as FileOperations;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -376,7 +377,12 @@ async fn to_file_event_and_send(
         );
     }
 
-    let file_event = FileEvent::new(event, kind, paths, hash);
+    let file_event = FileEvent {
+        event,
+        kind,
+        paths,
+        hash,
+    };
     info!("Constructed FileEvent from Raw Stream");
 
     if let Err(e) = processed_event_tx.send(file_event.into()).await {
@@ -407,7 +413,12 @@ async fn to_folder_event_and_send(
         );
     }
 
-    let folder_event = FolderEvent::new(event, kind, paths, hash);
+    let folder_event = FolderEvent {
+        event,
+        kind,
+        paths,
+        hash,
+    };
     info!("Constructed FileEvent from Raw Stream");
 
     if let Err(e) = processed_event_tx.send(folder_event.into()).await {
@@ -416,35 +427,4 @@ async fn to_folder_event_and_send(
         info!("Sending processed event successful")
     }
     Ok(())
-}
-
-impl FolderEvent {
-    fn new(
-        event: DebouncedEvent,
-        kind: EventKind,
-        paths: Vec<PathBuf>,
-        hash: Option<FolderHash>,
-    ) -> Self {
-        FolderEvent {
-            event,
-            paths,
-            kind,
-            hash,
-        }
-    }
-}
-impl FileEvent {
-    fn new(
-        event: DebouncedEvent,
-        kind: EventKind,
-        paths: Vec<PathBuf>,
-        hash: Option<FileHash>,
-    ) -> Self {
-        FileEvent {
-            event,
-            paths,
-            kind,
-            hash,
-        }
-    }
 }

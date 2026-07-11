@@ -55,7 +55,7 @@ tracing = "0.1.41"
 tracing-subscriber = { features = [ "env-filter" ], version = "0.3.19" }
 
 app = { path = "crates/app" }
-commands = { path = "crates/routes" }
+commands = { path = "crates/commands" }
 controllers = { path = "crates/controllers" }
 entity = { path = "crates/entity" }
 events = { path = "crates/events" }

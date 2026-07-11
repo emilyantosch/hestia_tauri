@@ -16,7 +16,7 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./crates/*"]
+      "@/*": ["./crates/src/*"]
     },
 
     /* Linting */
@@ -25,6 +25,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["./crates/**", "./crates/src/components/systems/command.tsx"],
+  "include": ["./crates/src/**/*"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

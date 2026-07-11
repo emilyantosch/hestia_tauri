@@ -5,7 +5,6 @@ import { motion, AnimatePresence, MotionConfig } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { ChevronDown, Shirt, Briefcase, Smartphone, Home, Layers } from "lucide-react"
-import { useClickAway } from "@/hooks/use-click-away"
 
 interface Category {
   id: string
@@ -72,8 +71,14 @@ export default function FluidDropdown() {
   const [hoveredCategory, setHoveredCategory] = React.useState<string | null>(null)
   const dropdownRef = React.useRef<HTMLDivElement>(null)
 
-  // Handle click outside to close dropdown
-  useClickAway(dropdownRef, () => setIsOpen(false))
+  React.useEffect(() => {
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!dropdownRef.current?.contains(event.target as Node)) setIsOpen(false)
+    }
+
+    document.addEventListener("mousedown", closeOnOutsideClick)
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick)
+  }, [])
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {

@@ -7,10 +7,9 @@ use std::time::Instant;
 use async_recursion::async_recursion;
 use tokio::fs;
 
-use crate::config::scanner::ScanConfig;
-use crate::data::file::File;
-use crate::data::folder::Folder;
-use crate::database::{FileMetadata, FileOperations};
+use model::services::file::FileSystemFile as File;
+use model::services::folder::FileSystemFolder as Folder;
+use repositories::fs::operations::{FileMetadata, FileRepository as FileOperations};
 use tracing::info;
 
 /// Types of synchronization operations

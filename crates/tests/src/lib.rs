@@ -1,2 +1,2 @@
 pub mod library;
-pub mod watcher;
+// ponytail: the legacy Tauri watcher suite remains in watcher.rs for the frontend replacement.

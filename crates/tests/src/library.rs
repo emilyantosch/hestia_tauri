@@ -2,8 +2,8 @@ use anyhow::{Context, Result, bail};
 use library::library::Library;
 use library::library::LibraryConfig;
 use library::library::LibraryPathConfig;
+use std::path::PathBuf;
 use tempfile::TempDir;
-use tokio::sync::Notify;
 use tracing::info;
 
 #[test]
@@ -34,8 +34,6 @@ fn check_delete_library() -> Result<()> {
 
 #[test]
 fn check_library_creation_successful() -> Result<()> {
-    use crate::config::library::Library;
-
     let path = dirs::data_dir().context("operating system did not provide a data directory")?;
     let test_path = TempDir::new_in(path)?;
     let lib = Library::new().switch_or_create_lib(&test_path.path().to_path_buf())?;
@@ -53,9 +51,6 @@ fn check_library_creation_successful() -> Result<()> {
 
 #[test]
 fn check_library_default_values() -> Result<()> {
-    use crate::config::library::Library;
-    use tempfile::TempDir;
-
     let path = dirs::data_dir().context("operating system did not provide a data directory")?;
     let test_path = TempDir::new_in(path)?;
     let lib = Library::new().switch_or_create_lib(&test_path.path().to_path_buf())?;

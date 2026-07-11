@@ -10,8 +10,9 @@ use sea_orm::{
 
 use entity::{prelude::*, thumbnails};
 
-use crate::data::internal::thumbnails::{Thumbnail, ThumbnailSize};
-use crate::database::DatabaseManager;
+use model::services::thumbnail::{Thumbnail, ThumbnailSize};
+
+use crate::manager::DatabaseManager;
 
 /// Statistics about thumbnails in the database
 #[derive(Debug, Clone)]
@@ -432,24 +433,24 @@ impl ThumbnailOperations {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::DatabaseManager;
-    use chrono::Local;
-    use entity::thumbnails;
-
-    // Helper function to create a test thumbnail
-    fn create_test_thumbnail() -> Thumbnail {
-        Thumbnail::with_image_data(ThumbnailSize::Small, vec![1, 2, 3, 4, 5])
-    }
+    use crate::config::DatabaseSettings;
+    use crate::manager::DatabaseManager;
+    use sea_orm::sqlx::sqlite::{SqliteJournalMode, SqliteSynchronous};
 
     #[tokio::test]
-    async fn test_thumbnail_repository_creation() {
-        let db_manager = Arc::new(DatabaseManager::new_sqlite_default().await.unwrap());
-        let repository = ThumbnailOperations::new(db_manager);
+    async fn thumbnail_repository_uses_configured_database() -> Result<()> {
+        let settings = DatabaseSettings::new(
+            "sqlite::memory:".to_string(),
+            1_000,
+            SqliteJournalMode::Memory,
+            SqliteSynchronous::Normal,
+        );
+        let repository = ThumbnailOperations::new(Arc::new(DatabaseManager::new(settings).await?));
 
-        // Just test that the repository can be created
-        assert!(matches!(
-            repository.database_manager.get_settings().db_type,
-            crate::config::database::DatabaseType::Sqlite
-        ));
+        assert_eq!(
+            repository.database_manager.get_settings().con_string,
+            "sqlite::memory:"
+        );
+        Ok(())
     }
 }

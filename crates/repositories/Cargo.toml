@@ -9,12 +9,18 @@ anyhow = { workspace = true }
 argon2 = { workspace = true }
 chrono = { workspace = true }
 entity = { workspace = true }
+events = { workspace = true }
+hash = { workspace = true }
 library = { workspace = true }
+model = { workspace = true }
 sea-orm = { workspace = true }
 secrecy = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
 
 [lints]
 workspace = true

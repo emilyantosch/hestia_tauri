@@ -1,7 +1,6 @@
 "use client";
 
 
-import { open } from '@tauri-apps/plugin-dialog';
 import { openPath } from '@tauri-apps/plugin-opener';
 
 import { useState } from "react";
@@ -13,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
   RiFolderAddLine,
-  RiFolderOpenLine,
   RiFolderLine,
   RiCloudLine,
   RiPriceTagLine,
@@ -32,7 +30,7 @@ interface LibraryListProps {
 }
 
 function LibraryList({ callback }: LibraryListProps): React.ReactNode {
-  const { isPending, error, data, refetch } = useQuery({
+  const { isPending, error, data } = useQuery({
     queryKey: ['library-list'],
     queryFn: () => invoke('list_available_library'),
     retry: false
@@ -89,10 +87,7 @@ function LibraryList({ callback }: LibraryListProps): React.ReactNode {
 
 export function LibrarySetup({ onLibraryCreated }: LibrarySetupProps) {
   const [isCreating, setIsCreating] = useState(false);
-  const [isOpening, setIsOpening] = useState(false);
   const [newLibraryName, setNewLibraryName] = useState("");
-  const [selectedPath, setSelectedPath] = useState("");
-  const [libraryList, setLibraryList] = useState([]);
 
 
 

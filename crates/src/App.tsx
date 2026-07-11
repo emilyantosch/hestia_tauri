@@ -8,7 +8,6 @@ import {
 import Chat from "@/components/chat";
 import { LibrarySetup } from "@/components/library-setup";
 import Layout from "./Layout";
-import { PathLike } from "fs";
 
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 
@@ -24,18 +23,9 @@ function App() {
 }
 
 
-type Library = {
-  share_path: PathLike,
-  config: LibraryConfig,
-}
-
-type LibraryConfig = {
-  paths: LibraryPathConfig[],
-}
-
 type LibraryPathConfig = {
-  name: String,
-  path: PathLike
+  name: string,
+  path: string
 }
 
 

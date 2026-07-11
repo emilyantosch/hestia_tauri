@@ -1,5 +1,5 @@
 #[derive(Debug)]
-pub(crate) struct Tag {
-    id: u32,
-    name: String,
+pub struct Tag {
+    pub id: u32,
+    pub name: String,
 }
