@@ -15,6 +15,17 @@ use crate::io;
 pub struct Library {
     pub share_path: Option<PathBuf>,
     pub library_config: Option<LibraryConfig>,
+    data_home: Option<PathBuf>,
+}
+
+impl Default for Library {
+    fn default() -> Self {
+        Self {
+            share_path: None,
+            library_config: None,
+            data_home: None,
+        }
+    }
 }
 
 impl Drop for Library {
@@ -65,10 +76,22 @@ impl Default for LibraryConfig {
 impl Library {
     #[must_use]
     pub fn new() -> Library {
+        Library::default()
+    }
+
+    #[must_use]
+    pub fn new_in(data_home: impl Into<PathBuf>) -> Library {
         Library {
             share_path: None,
             library_config: None,
+            data_home: Some(data_home.into()),
         }
+    }
+
+    fn data_home(&self) -> Result<PathBuf> {
+        self.data_home
+            .clone()
+            .map_or_else(io::create_or_validate_data_directory, Ok)
     }
 
     /// Save the current library path to disk for restoration in future sessions
@@ -83,7 +106,7 @@ impl Library {
         };
 
         let last_library_toml = toml::to_string(&last_library)?;
-        let last_path = io::create_or_validate_data_directory()?.join("hestia/last_lib.toml");
+        let last_path = self.data_home()?.join("hestia/last_lib.toml");
 
         io::write_string_to_file(&last_path, &last_library_toml)?;
         Ok(())
@@ -91,7 +114,13 @@ impl Library {
 
     /// Return the library from the previous run.
     pub fn last() -> Result<Library> {
-        let last_path = io::create_or_validate_data_directory()?.join("hestia/last_lib.toml");
+        let data_home = io::create_or_validate_data_directory()?;
+        Self::last_in(data_home)
+    }
+
+    pub fn last_in(data_home: impl Into<PathBuf>) -> Result<Library> {
+        let data_home = data_home.into();
+        let last_path = data_home.join("hestia/last_lib.toml");
         let last_content = io::read_file_to_string(&last_path)?;
 
         let last_lib_path: LastLibrary = toml::from_str(&last_content)?;
@@ -99,7 +128,7 @@ impl Library {
             .path
             .context("last library configuration does not contain a path")?;
 
-        Self::new().switch_or_create_lib(&share_path)
+        Self::new_in(&data_home).switch_or_create_lib_in(&share_path, data_home)
     }
 
     /// Return the last library or create a new one if none exists
@@ -171,18 +200,29 @@ impl Library {
     }
 
     /// Switch to an existing library or create a new one at the given path
-    pub fn switch_or_create_lib(mut self, share_path: &Path) -> Result<Library> {
+    pub fn switch_or_create_lib(self, share_path: &Path) -> Result<Library> {
+        let data_home = self.data_home()?;
+        self.switch_or_create_lib_in(share_path, data_home)
+    }
+
+    pub fn switch_or_create_lib_in(
+        mut self,
+        share_path: &Path,
+        data_home: impl Into<PathBuf>,
+    ) -> Result<Library> {
         tracing::info!("Switching to or creating library at {share_path:#?}");
 
-        let datahome = io::create_or_validate_data_directory()?;
+        let data_home_path = data_home.into();
+        io::ensure_directory_exists(&data_home_path)?;
+        self.data_home = Some(data_home_path.clone());
         tracing::info!("Data home directory verified");
 
         // Validate that share path is within data home
-        if !share_path.starts_with(&datahome) {
+        if !share_path.starts_with(&data_home_path) {
             bail!(
                 "library path {} must be inside the data directory {}",
                 share_path.display(),
-                datahome.display()
+                data_home_path.display()
             );
         }
 
@@ -219,12 +259,20 @@ impl Library {
 
     /// List all available libraries
     pub fn list_libraries() -> Result<Vec<String>> {
-        let share_path = io::create_or_validate_data_directory()?.join("hestia");
+        let data_home = io::create_or_validate_data_directory()?;
+        Self::list_libraries_in(data_home)
+    }
+
+    pub fn list_libraries_in(data_home: impl AsRef<Path>) -> Result<Vec<String>> {
+        let share_path = data_home.as_ref().join("hestia");
         tracing::info!("Listing libraries in {share_path:#?}");
 
         io::ensure_directory_exists(&share_path)?;
 
-        let libraries = io::list_directory_entries(&share_path)?;
+        let libraries = io::list_directory_entries(&share_path)?
+            .into_iter()
+            .filter(|path| Path::new(path).join("config.toml").is_file())
+            .collect::<Vec<_>>();
         tracing::info!("Found {} libraries", libraries.len());
 
         Ok(libraries)
