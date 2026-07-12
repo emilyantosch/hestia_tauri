@@ -742,6 +742,7 @@ dependencies = [
  "services",
  "tempfile",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

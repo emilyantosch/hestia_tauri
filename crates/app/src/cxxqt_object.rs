@@ -258,7 +258,7 @@ impl ffi::HestiaBackend {
                 let _thumbnail_result = context.controller.generate_thumbnails().await;
             }
             if result.is_ok() {
-                match context.controller.start_watching() {
+                match context.controller.start_watching().await {
                     Ok(mut changes) => {
                         let watcher_thread = qt_thread.clone();
                         let controller = Arc::clone(&context.controller);

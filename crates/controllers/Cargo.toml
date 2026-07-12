@@ -14,6 +14,7 @@ repositories.workspace = true
 sea-orm.workspace = true
 services.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
