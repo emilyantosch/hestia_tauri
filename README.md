@@ -1,9 +1,9 @@
 <p align="center" style="color:grey">
 
  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./app/public/20250925_logo_dark_rotated_rev01.svg">
-    <source media="(prefers-color-scheme: light)" srcset="./app/public/20250925_logo_light_rotated_rev01.svg">
-    <img alt="Logo" src="./app/public/logo.svg" style="transform: rotate(-90deg);">
+    <source media="(prefers-color-scheme: dark)" srcset="./crates/app/icons/icon.png">
+    <source media="(prefers-color-scheme: light)" srcset="./crates/app/icons/icon.png">
+    <img alt="Hestia logo" src="./crates/app/icons/icon.png" width="128">
   </picture>
 
 <div align="center">
@@ -14,7 +14,7 @@
 
 ##### `"This app is still in early development but aims to help you organize your files, your emails, and your tasks as efficient as possible."`
 
-![GitHub Stars](https://img.shields.io/github/stars/emilyantosch/hestia_tauri?style=social) ![GitHub Forks](https://img.shields.io/github/forks/emilyantosch/hestia_tauri?style=social) ![GitHub Issues](https://img.shields.io/github/issues/emilyantosch/hestia_tauri) ![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
 <img width="2000" height="0">
 </td>
@@ -40,19 +40,14 @@ Hestia is a **cross-platform file management system** that uses intelligent tagg
 
 ## Quickstart
 
-Clone the repo, `cd` into the directory, install dependencies via:
+Install Rust 1.85 or newer, a C++ compiler, and Qt 6 with `qmake`, then run:
 
 ```sh
-deno install
+export QMAKE=/absolute/path/to/Qt/bin/qmake
+cargo run -p hestia
 ```
 
-and run:
-
-```sh
-deno task tauri dev
-```
-
-This should compile the rust code base and start the development server as well as the app itself.
+With Nix, `nix develop` configures Qt and `QMAKE` before running the same Cargo command.
 
 ## FAQs
 

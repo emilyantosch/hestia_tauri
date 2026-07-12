@@ -21,6 +21,24 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
+        qt = pkgs.symlinkJoin {
+          name = "hestia-qt";
+          paths = [ pkgs.qt6.qtbase pkgs.qt6.qtdeclarative ];
+        };
+        qmake = pkgs.writeShellScript "hestia-qmake" ''
+          if [ "$1" = "-query" ]; then
+            case "$2" in
+              QT_INSTALL_PREFIX|QT_HOST_PREFIX|QT_INSTALL_ARCHDATA|QT_HOST_DATA) echo "${qt}"; exit ;;
+              QT_INSTALL_HEADERS) echo "${qt}/include"; exit ;;
+              QT_INSTALL_LIBS|QT_HOST_LIBS) echo "${qt}/lib"; exit ;;
+              QT_INSTALL_PLUGINS) echo "${qt}/lib/qt-6/plugins"; exit ;;
+              QT_INSTALL_QML) echo "${qt}/lib/qt-6/qml"; exit ;;
+              QT_INSTALL_LIBEXECS|QT_HOST_LIBEXECS) echo "${qt}/libexec"; exit ;;
+              QT_INSTALL_BINS|QT_HOST_BINS) echo "${qt}/bin"; exit ;;
+            esac
+          fi
+          exec ${pkgs.qt6.qtbase}/bin/qmake "$@"
+        '';
       in
       {
         devShells.default =
@@ -30,37 +48,22 @@
             buildInputs = [
               (rust-bin.stable.latest.default.override { extensions = [ "rust-src" ]; })
               sea-orm-cli
-              gobject-introspection
-              xorg.libX11
-              atk
-              unixtools.netstat
-              # lsb-release
-              xdg-utils
               sqlite
               sqlite.dev
               openssl.dev
               pkg-config
-              atkmm
-              at-spi2-atk
-              cairo
-              gdk-pixbuf
-              glib
-              gtk3
-              harfbuzz
-              librsvg
-              libsoup_3
-              pango
-              webkitgtk_4_1
               libiconv
+              libglvnd
+              qt
             ];
             nativeBuildInputs = [
               pkg-config
               openssl.dev
-              # darwin.libiconv.dev
-            ]
-            ++ lib.optionals pkgs.stdenv.isDarwin [
             ];
             NIX_SHELL = "hestia";
+            QMAKE = qmake;
+            QML_IMPORT_PATH = "${qt}/lib/qt-6/qml";
+            QML2_IMPORT_PATH = "${qt}/lib/qt-6/qml";
           };
       }
     );

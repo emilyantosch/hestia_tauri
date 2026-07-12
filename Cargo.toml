@@ -1,19 +1,6 @@
 [workspace]
-members = [ "crates/app", "crates/commands", "crates/controllers", "crates/entity", "crates/events", "crates/hash", "crates/io", "crates/library", "crates/migration", "crates/model", "crates/repositories", "crates/services", "crates/tests" ]
+members = [ "crates/app", "crates/controllers", "crates/entity", "crates/events", "crates/hash", "crates/io", "crates/library", "crates/migration", "crates/model", "crates/repositories", "crates/services", "crates/tests" ]
 resolver = "3"
-
-[profile]
-
-[profile.wasm-dev]
-inherits = "dev"
-opt-level = 1
-
-[profile.server-dev]
-inherits = "dev"
-
-[profile.android-dev]
-inherits = "dev"
-
 
 [workspace.package]
 edition = "2024"
@@ -22,6 +9,10 @@ version = "0.1.0"
 [workspace.dependencies]
 
 aes-gcm = "0.10.3"
+cxx = "1.0.176"
+cxx-qt = "0.9.1"
+cxx-qt-build = { features = [ "link_qt_object_files" ], version = "0.9.1" }
+cxx-qt-lib = { default-features = false, features = [ "qt_full" ], version = "0.9.1" }
 anyhow = { version = "1.0.98" }
 argon2 = { features = [  ], version = "0.6.0-rc.0" }
 async-recursion = "1.1.1"
@@ -31,7 +22,6 @@ blake3 = "1.8.2"
 cfg-if = "1.0.1"
 chrono = { features = [ "serde" ], version = "0.4" }
 dirs = "6.0.0"
-gtk = "0.18.2"
 image = { default-features = false, features = [ "bmp", "gif", "jpeg", "png", "tiff", "webp" ], version = "0.25" }
 infer = "0.19.0"
 keyring = "3.6.2"
@@ -40,22 +30,16 @@ notify-debouncer-full = "0.6.0"
 num_cpus = "1.17.0"
 password-hash = { features = [ "rand_core" ], version = "0.6.0-rc.1" }
 rand = "0.9.1"
-rfd = { default-features = false, features = [  ], version = "*" }
 sea-orm = { features = [ "chrono", "macros", "runtime-tokio-rustls", "sqlx-sqlite" ], version = "1.1.10" }
 secrecy = "0.10.3"
 serde = { features = [ "derive" ], version = "1" }
 serde_json = "1"
-tauri = { features = [ "webkit2gtk" ], version = "2" }
-tauri-plugin-dialog = "2"
-tauri-plugin-opener = "2"
 tempfile = "3.20.0"
 tokio = { features = [ "full" ], version = "*" }
 toml = "0.8.23"
 tracing = "0.1.41"
 tracing-subscriber = { features = [ "env-filter" ], version = "0.3.19" }
 
-app = { path = "crates/app" }
-commands = { path = "crates/commands" }
 controllers = { path = "crates/controllers" }
 entity = { path = "crates/entity" }
 events = { path = "crates/events" }
@@ -82,7 +66,7 @@ missing_copy_implementations = "warn"
 missing_debug_implementations = "warn"
 redundant_lifetimes = "warn"
 unreachable_pub = "warn"
-unsafe_code = "forbid"                 # if this is blocking you, let's discuss in the team
+unsafe_code = "deny"                   # CXX-Qt bridge modules carry narrow, documented exceptions
 unstable_features = "forbid"           # if this is blocking you, let's discuss in the team
 unused_import_braces = "warn"
 unused_lifetimes = "warn"
