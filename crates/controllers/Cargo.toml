@@ -4,6 +4,20 @@ edition.workspace = true
 version.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+chrono.workspace = true
+entity.workspace = true
+library.workspace = true
+migration.workspace = true
+model.workspace = true
+repositories.workspace = true
+sea-orm.workspace = true
+services.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true
