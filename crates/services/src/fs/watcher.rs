@@ -45,14 +45,20 @@ pub trait FileWatcherEventHandler: Send + Sync {
     async fn handle_event(&self, event: FSEvent) -> Result<()>;
 }
 
+#[derive(Debug)]
 pub struct DatabaseFileWatcherEventHandler {
     pub db_operations: FileOperations,
+    pub changes: Option<UnboundedSender<()>>,
 }
 
 #[async_trait::async_trait]
 impl FileWatcherEventHandler for DatabaseFileWatcherEventHandler {
     async fn handle_event(&self, event: FSEvent) -> Result<()> {
-        FileWatcher::to_database(event, &self.db_operations).await
+        FileWatcher::to_database(event, &self.db_operations).await?;
+        if let Some(changes) = &self.changes {
+            let _send_result = changes.send(());
+        }
+        Ok(())
     }
 }
 
