@@ -1,5 +1,8 @@
 use anyhow::{Result, bail};
-use std::path::{Path, PathBuf};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
 pub mod decorations;
 pub mod file;
@@ -8,8 +11,15 @@ pub mod tag;
 pub mod thumbnail;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// This path is always considered to exist and to be canonical
 pub struct CanonPath {
     path: PathBuf,
+}
+
+impl fmt::Display for CanonPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.path.display().fmt(f)
+    }
 }
 
 impl TryFrom<PathBuf> for CanonPath {
