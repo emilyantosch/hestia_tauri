@@ -12,14 +12,12 @@ pub struct CanonPath {
     path: PathBuf,
 }
 
-//FIXME: Turn this into try_from as this may fail
-impl From<PathBuf> for CanonPath {
-    fn from(path: PathBuf) -> CanonPath {
-        let p = match path.canonicalize() {
-            Ok(path) => path,
-            Err(_) => PathBuf::new(),
-        };
-        CanonPath { path: p }
+impl TryFrom<PathBuf> for CanonPath {
+    type Error = anyhow::Error;
+    fn try_from(path: PathBuf) -> Result<CanonPath> {
+        Ok(CanonPath {
+            path: path.canonicalize()?,
+        })
     }
 }
 
